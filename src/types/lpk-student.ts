@@ -36,6 +36,27 @@ export type LpkPekerjaanItem = {
   tahun_selesai?: string | null;
 };
 
+export type TimelineEventStatus = "done" | "current" | "upcoming" | "failed";
+
+export type TimelineEvent = {
+  label: string;
+  date?: string;
+  status: TimelineEventStatus;
+  note?: string;
+};
+
+export type JobPlacement = {
+  prefektur: string;
+  kota: string;
+  alamat_kerja: string;
+  nama_perusahaan: string;
+  bidang_usaha: string;
+  posisi: string;
+  gaji: string;
+  durasi_kontrak: string;
+  hari_libur: string;
+};
+
 /** Data siswa LPK Mitra — selaras kolom tabel profil siswa Jukyu */
 export type LpkStudentRecord = {
   id: string;
@@ -98,6 +119,8 @@ export type LpkStudentRecord = {
   sertifikat: LpkSertifikatItem[];
   pendidikan: LpkPendidikanItem[];
   pekerjaan: LpkPekerjaanItem[];
+  timeline?: TimelineEvent[];
+  job_placement?: JobPlacement;
 };
 
 export function createEmptyLpkStudent(partial?: Partial<LpkStudentRecord>): LpkStudentRecord {

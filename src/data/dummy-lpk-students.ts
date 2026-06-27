@@ -11,7 +11,7 @@ export function getDummyLpkStudents(): LpkStudentRecord[] {
   return [
     fullStudent({
       id: "dummy-001",
-      status: "rekrut",
+      status: "match_job",
       foto: emojiAvatarDataUrl("👨"),
       no_peserta: "FTI-2026-001",
       nik: "3201987654321001",
@@ -55,6 +55,7 @@ export function getDummyLpkStudents(): LpkStudentRecord[] {
       tanggal_masuk_pelatihan: "2026-01-10",
       tanggal_kelulusan: "2026-12-15",
       perkiraan_masuk_jepang: "2027-04-01",
+      tanggal_keberangkatan: "2027-03-28",
       pendidikan: [
         {
           nama_sekolah: "SMK NEGERI 2 SUKABUMI",
@@ -92,6 +93,28 @@ export function getDummyLpkStudents(): LpkStudentRecord[] {
         { hubungan: "Ayah", nama: "DADANG PRATAMA", umur: "50", status_pekerjaan: "Petani" },
         { hubungan: "Ibu", nama: "SRI WAHYUNI", umur: "48", status_pekerjaan: "Ibu Rumah Tangga" },
       ],
+      timeline: [
+        { label: "Masuk Pelatihan", date: "2026-01-10", status: "done" },
+        { label: "Pembelajaran Bahasa", date: "2026-01-15", status: "done" },
+        { label: "Matching Job #1", date: "2026-05-20", status: "done" },
+        { label: "Mensetsu #1", date: "2026-06-05", status: "failed", note: "Gagal — kurang pengalaman teknis" },
+        { label: "Matching Job #2", date: "2026-07-10", status: "done" },
+        { label: "Mensetsu #2", date: "2026-07-25", status: "done", note: "Lulus mensetsu" },
+        { label: "Pemberkasan", date: "2026-08-10", status: "done" },
+        { label: "Keberangkatan", date: "2027-03-28", status: "done" },
+        { label: "Tiba di Jepang", date: "2027-04-01", status: "done" },
+      ],
+      job_placement: {
+        prefektur: "Aichi-ken (愛知県)",
+        kota: "Toyota-shi (豊田市)",
+        alamat_kerja: "1-2-3 Motomachi, Toyota-shi, Aichi-ken 471-0034",
+        nama_perusahaan: "Toyota Boshoku Corporation",
+        bidang_usaha: "Manufaktur Komponen Otomotif",
+        posisi: "Operator Mesin CNC",
+        gaji: "¥180,000 / bulan",
+        durasi_kontrak: "3 Tahun",
+        hari_libur: "8 hari / bulan (Sabtu-Minggu, hari libur nasional)",
+      },
     }),
     fullStudent({
       id: "dummy-002",
@@ -153,6 +176,15 @@ export function getDummyLpkStudents(): LpkStudentRecord[] {
           tahun_lulus: "2022",
         },
       ],
+      timeline: [
+        { label: "Masuk Pelatihan", date: "2026-02-01", status: "done" },
+        { label: "Pembelajaran Bahasa", date: "2026-02-10", status: "current", note: "Sedang berlangsung — level N5" },
+        { label: "Matching Job", status: "upcoming" },
+        { label: "Mensetsu", status: "upcoming" },
+        { label: "Pemberkasan", status: "upcoming" },
+        { label: "Keberangkatan", status: "upcoming" },
+        { label: "Tiba di Jepang", status: "upcoming" },
+      ],
     }),
     fullStudent({
       id: "dummy-003",
@@ -192,6 +224,7 @@ export function getDummyLpkStudents(): LpkStudentRecord[] {
       hobi: "釣り",
       jenis_pekerjaan: "Magang PM",
       asal_lpk: "LPK Mitra Bandung",
+      tanggal_masuk_pelatihan: "2025-08-01",
       sertifikat: [
         { nama_sertifikat: "JLPT N3", status_kelulusan: 1, score: "142", sertifikat: "jlpt_n3_budi.pdf" },
         { nama_sertifikat: "Sertifikat Welding", status_kelulusan: 1, score: "A", sertifikat: "welding_budi.pdf" },
@@ -206,6 +239,15 @@ export function getDummyLpkStudents(): LpkStudentRecord[] {
           tahun_mulai: "2020",
           tahun_selesai: "2023",
         },
+      ],
+      timeline: [
+        { label: "Masuk Pelatihan", date: "2025-08-01", status: "done" },
+        { label: "Pembelajaran Bahasa", date: "2025-08-15", status: "done" },
+        { label: "Matching Job", date: "2026-04-10", status: "done" },
+        { label: "Mensetsu", date: "2026-05-15", status: "current", note: "Menunggu hasil mensetsu" },
+        { label: "Pemberkasan", status: "upcoming" },
+        { label: "Keberangkatan", status: "upcoming" },
+        { label: "Tiba di Jepang", status: "upcoming" },
       ],
     }),
     fullStudent({
@@ -245,7 +287,7 @@ export function getDummyLpkStudents(): LpkStudentRecord[] {
       patah_tulang: "Tidak Ada",
       hobi: "読書",
       jenis_pekerjaan: "Magang Care Worker",
-      asal_lpk: "LPK Mitra Sukabumi",
+      asal_lpk: "Mandiri",
       tanggal_masuk_pelatihan: "2026-01-20",
       sertifikat: [
         { nama_sertifikat: "JLPT N4", status_kelulusan: 1, score: "120", sertifikat: "jlpt_n4_dewi.pdf" },
@@ -254,6 +296,15 @@ export function getDummyLpkStudents(): LpkStudentRecord[] {
       keluarga: [
         { hubungan: "Ayah", nama: "ASEP LESTARI", umur: "51", status_pekerjaan: "Pedagang" },
         { hubungan: "Ibu", nama: "YATI SUMARNI", umur: "47", status_pekerjaan: "Pedagang" },
+      ],
+      timeline: [
+        { label: "Masuk Pelatihan", date: "2026-01-20", status: "done" },
+        { label: "Pembelajaran Bahasa", date: "2026-01-25", status: "done" },
+        { label: "Matching Job #1", date: "2026-06-10", status: "done" },
+        { label: "Mensetsu #1", date: "2026-06-25", status: "failed", note: "Gagal — tidak memenuhi syarat kesehatan" },
+        { label: "Matching Job #2", date: "2026-08-05", status: "done" },
+        { label: "Mensetsu #2", date: "2026-08-20", status: "failed", note: "Gagal — kemampuan bahasa kurang" },
+        { label: "Dikeluarkan", date: "2026-09-01", status: "failed", note: "Tidak lulus setelah 2x gagal mensetsu" },
       ],
     }),
     fullStudent({
@@ -309,6 +360,13 @@ export function getDummyLpkStudents(): LpkStudentRecord[] {
           tahun_lulus: "2022",
         },
       ],
+      timeline: [
+        { label: "Masuk Pelatihan", date: "2026-03-01", status: "done" },
+        { label: "Pembelajaran Bahasa", date: "2026-03-10", status: "done" },
+        { label: "Matching Job", date: "2026-09-15", status: "done" },
+        { label: "Mensetsu", date: "2026-10-01", status: "failed", note: "Gagal — mengundurkan diri karena alasan pribadi" },
+        { label: "Dikeluarkan", date: "2026-10-10", status: "failed", note: "Mengundurkan diri dari program" },
+      ],
     }),
     fullStudent({
       id: "dummy-006",
@@ -347,11 +405,18 @@ export function getDummyLpkStudents(): LpkStudentRecord[] {
       patah_tulang: "Tidak Ada",
       hobi: "園芸",
       jenis_pekerjaan: "Magang Hospitality",
-      asal_lpk: "LPK Mitra Semarang",
+      asal_lpk: "Mandiri",
       tanggal_masuk_pelatihan: "2026-02-15",
       sertifikat: [{ nama_sertifikat: "JLPT N5", status_kelulusan: 1, score: "88", sertifikat: "jlpt_n5_fitri.pdf" }],
       sertifikat_dimiliki: ["JLPT N5"],
       keluarga: [{ hubungan: "Ibu", nama: "HANDAYANI", umur: "45", status_pekerjaan: "Pedagang" }],
+      timeline: [
+        { label: "Masuk Pelatihan", date: "2026-02-15", status: "done" },
+        { label: "Pembelajaran Bahasa", date: "2026-02-20", status: "done" },
+        { label: "Matching Job", date: "2026-07-01", status: "done" },
+        { label: "Mensetsu", date: "2026-07-15", status: "failed", note: "Gagal — tidak hadir saat interview" },
+        { label: "Dikeluarkan", date: "2026-07-20", status: "failed", note: "Tidak lulus karena absensi buruk" },
+      ],
     }),
   ];
 }

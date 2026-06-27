@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Eye, Pencil } from "lucide-react";
+import { Eye, Info, Pencil } from "lucide-react";
 import StickyHorizontalScroll from "@/components/StickyHorizontalScroll";
 import DownloadFileButton from "@/components/lpk/DownloadFileButton";
 import { useFtiAdmin } from "@/hooks/use-fti-admin";
@@ -14,6 +14,7 @@ import {
   PersonalDataModal,
 } from "./SubDataModals";
 import { SiswaTh, SiswaTd, cell, fmtGender, fmtMata } from "./table-helpers";
+import StudentDetailsModal from "@/components/fti/StudentDetailsModal";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 
 type Props = {
@@ -24,6 +25,8 @@ type Props = {
   emptyAction?: React.ReactNode;
   /** Paksa aktif/nonaktif unduh; default mengikuti sesi Admin FTI */
   allowDownload?: boolean;
+  showJalurPendaftaran?: boolean;
+  showStatusSiswa?: boolean;
 };
 
 export default function LpkSiswaTable({
@@ -33,6 +36,8 @@ export default function LpkSiswaTable({
   emptyMessage = "Belum ada siswa.",
   emptyAction,
   allowDownload: allowDownloadProp,
+  showJalurPendaftaran = false,
+  showStatusSiswa = false,
 }: Props) {
   const ftiAdmin = useFtiAdmin();
   const allowDownload = allowDownloadProp ?? ftiAdmin;
@@ -41,6 +46,7 @@ export default function LpkSiswaTable({
   const [certStudent, setCertStudent] = useState<LpkStudentRecord | null>(null);
   const [personalStudent, setPersonalStudent] = useState<LpkStudentRecord | null>(null);
   const [cvPreviewStudent, setCvPreviewStudent] = useState<LpkStudentRecord | null>(null);
+  const [detailStudent, setDetailStudent] = useState<LpkStudentRecord | null>(null);
 
   const rows = useMemo(() => students, [students]);
 
@@ -73,6 +79,12 @@ export default function LpkSiswaTable({
                   id="Nama Peserta"
                   sticky="sticky left-[280px] z-20 min-w-[200px] bg-gray-100 shadow-[4px_0_10px_rgba(0,0,0,0.05)]"
                 />
+                {showJalurPendaftaran && (
+                  <SiswaTh jp="登録ルート" id="Jalur Pendaftaran" className="min-w-[150px] bg-gray-100" />
+                )}
+                {showStatusSiswa && (
+                  <SiswaTh jp="学生のステータス" id="Status Siswa" className="min-w-[180px] bg-gray-100" />
+                )}
                 <SiswaTh jp="履歴書" id="Preview CV" cv className="text-center min-w-[100px]" />
                 <SiswaTh jp="カタカナ" id="Katakana" cv />
                 <SiswaTh jp="親のデータ" id="Data Orang Tua" cv />
@@ -106,7 +118,13 @@ export default function LpkSiswaTable({
                 <SiswaTh jp="入国予定日" id="Perkiraan Masuk (Jepang)" />
                 <SiswaTh jp="出国日" id="Tanggal Keberangkatan" />
                 <SiswaTh jp="個人データファイル" id="File Data Diri" cv />
-                {!readOnly && (
+                {showStatusSiswa && (
+                  <th className="px-4 py-4 font-semibold border border-gray-200 sticky right-0 bg-gray-100 shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-center text-xs uppercase z-20">
+                    アクション<br />
+                    <span className="text-[10px] text-gray-500 normal-case font-medium">Action</span>
+                  </th>
+                )}
+                {!readOnly && !showStatusSiswa && (
                   <th className="px-4 py-4 font-semibold border border-gray-200 sticky right-0 bg-gray-100 shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-center text-xs uppercase z-20">
                     Aksi
                   </th>
@@ -137,6 +155,34 @@ export default function LpkSiswaTable({
                   >
                     {s.nama_lengkap}
                   </SiswaTd>
+                  {showJalurPendaftaran && (
+                    <SiswaTd>
+                      <span className="font-medium text-primary-pink">
+                        {(!s.asal_lpk || s.asal_lpk.toLowerCase() === 'fti' || s.asal_lpk.toLowerCase() === 'mandiri') ? 'Mandiri' : s.asal_lpk}
+                      </span>
+                    </SiswaTd>
+                  )}
+                  {showStatusSiswa && (
+                    <SiswaTd className="text-center">
+                      {(() => {
+                        let label = 'Tidak Lulus';
+                        let colorClass = 'bg-red-50 text-red-700 border-red-200';
+                        if (s.status === 'match_job') {
+                          label = 'Sudah Lulus';
+                          colorClass = 'bg-green-50 text-green-700 border-green-200';
+                        } else if (s.status === 'aktif') {
+                          label = 'Sedang Dalam Pembelajaran';
+                          colorClass = 'bg-yellow-50 text-yellow-700 border-yellow-200';
+                        }
+
+                        return (
+                          <span className={`inline-flex items-center px-2.5 py-1 text-[10px] font-semibold border ${colorClass}`}>
+                            {label}
+                          </span>
+                        );
+                      })()}
+                    </SiswaTd>
+                  )}
                   <SiswaTd cv className="text-center">
                     <button
                       type="button"
@@ -208,7 +254,19 @@ export default function LpkSiswaTable({
                       Lihat File
                     </button>
                   </SiswaTd>
-                  {!readOnly && (
+                  {showStatusSiswa && (
+                    <td className="px-4 py-4 border border-gray-200 sticky right-0 bg-white group-hover:bg-slate-50 shadow-[-4px_0_10px_rgba(0,0,0,0.02)] text-center z-10">
+                      <button
+                        type="button"
+                        onClick={() => setDetailStudent(s)}
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-full text-gray-500 border border-gray-300 hover:border-primary-pink hover:text-primary-pink hover:bg-primary-pink-light transition-colors"
+                        title="Lihat Detail Siswa"
+                      >
+                        <Info size={16} strokeWidth={2.5} />
+                      </button>
+                    </td>
+                  )}
+                  {!readOnly && !showStatusSiswa && (
                     <td className="px-4 py-4 border border-gray-200 sticky right-0 bg-white group-hover:bg-slate-50 shadow-[-4px_0_10px_rgba(0,0,0,0.02)] text-center z-10">
                       <button
                         type="button"
@@ -256,6 +314,12 @@ export default function LpkSiswaTable({
           student={cvPreviewStudent}
           onClose={() => setCvPreviewStudent(null)}
           allowDownload={allowDownload}
+        />
+      )}
+      {detailStudent && (
+        <StudentDetailsModal
+          student={detailStudent}
+          onClose={() => setDetailStudent(null)}
         />
       )}
     </>
