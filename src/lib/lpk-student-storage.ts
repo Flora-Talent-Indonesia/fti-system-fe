@@ -3,7 +3,7 @@ import { getDummyLpkStudents } from "@/data/dummy-lpk-students";
 
 const STORAGE_KEY = "flora_lpk_mitra_students_v1";
 const SEED_FLAG_KEY = "flora_lpk_mitra_seeded_v5";
-const SEED_VERSION = "5";
+const SEED_VERSION = "8";
 
 export function loadLpkStudents(): LpkStudentRecord[] {
   if (typeof window === "undefined") return [];
