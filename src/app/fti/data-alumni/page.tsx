@@ -4,16 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Search } from "lucide-react";
 import PortalPageShell from "@/components/PortalPageShell";
-import LpkSiswaTable from "@/app/lpk-mitra/components/LpkSiswaTable";
-import { seedLpkStudentsIfEmpty } from "@/lib/lpk-student-storage";
+import AlumniDataTable from "@/components/fti/AlumniDataTable";
+import { seedLpkStudentsIfEmpty, upsertLpkStudent } from "@/lib/lpk-student-storage";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 
-export default function DatabaseSiswaPage() {
+export default function DataAlumniPage() {
   const [students, setStudents] = useState<LpkStudentRecord[]>([]);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    // Get all students
     const all = seedLpkStudentsIfEmpty();
     setStudents(all);
   }, []);
@@ -43,10 +42,10 @@ export default function DatabaseSiswaPage() {
             </Link>
             <div>
               <h1 className="text-3xl font-serif text-gray-900 tracking-wide mb-1">
-                Database Siswa
+                Data Alumni
               </h1>
               <p className="text-xs font-medium text-gray-500 tracking-widest uppercase">
-                Semua Data Siswa — LPK Mitra & Mandiri
+                Semua Data Alumni — LPK Mitra & Mandiri
               </p>
             </div>
           </div>
@@ -67,15 +66,16 @@ export default function DatabaseSiswaPage() {
         </header>
 
         <div className="mb-4 border border-primary-pink/20 bg-primary-pink-light px-4 py-3 text-sm text-gray-700">
-          <strong>Mode testing:</strong> Data semua siswa yang terdaftar di sistem. Anda dapat melihat dari mana siswa berasal melalui kolom <strong>Jalur Pendaftaran</strong>.
+          <strong>Mode testing:</strong> Data semua alumni yang terdaftar di sistem. Anda dapat melihat asal alumni melalui kolom <strong>Jalur Pendaftaran</strong>.
         </div>
 
-        <LpkSiswaTable
+        <AlumniDataTable
           students={filtered}
-          readOnly
-          showJalurPendaftaran
-          showStatusSiswa
-          emptyMessage="Belum ada siswa yang terdaftar di database."
+          emptyMessage="Belum ada alumni yang terdaftar."
+          onSave={(updated) => {
+            upsertLpkStudent(updated);
+            setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+          }}
         />
       </main>
     </PortalPageShell>

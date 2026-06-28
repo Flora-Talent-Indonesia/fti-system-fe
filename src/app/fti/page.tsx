@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Briefcase, LogOut, Settings, UserPlus, Users, Database } from "lucide-react";
+import { Briefcase, GraduationCap, LogOut, Settings, UserPlus, Users, UserCog, ClipboardList } from "lucide-react";
 import PortalPageShell from "@/components/PortalPageShell";
 import LpkHubCard from "@/components/lpk/LpkHubCard";
 import { useLiveClock } from "@/hooks/use-live-clock";
@@ -97,11 +97,32 @@ export default function FtiHubPage() {
               cta="Kelola Akun"
             />
             <LpkHubCard
-              href="/fti/database-siswa"
-              icon={Database}
-              title="Database Siswa"
-              titleJa="学生データベース"
-              cta="Lihat Database"
+              href="/fti/data-siswa-fti"
+              icon={ClipboardList}
+              title="Data Siswa FTI"
+              titleJa="FTI学生データ"
+              cta="Lihat Profil"
+            />
+            <LpkHubCard
+              href="/fti/data-alumni"
+              icon={GraduationCap}
+              title="Data Alumni"
+              titleJa="卒業生データ"
+              cta="Lihat Data"
+            />
+            <LpkHubCard
+              href="/fti/add-account"
+              icon={UserPlus}
+              title="Buat Akun Siswa"
+              titleJa="学生アカウント作成"
+              cta="Tambah Akun"
+            />
+            <LpkHubCard
+              href="/fti/student-account-management"
+              icon={UserCog}
+              title="Student Account Management"
+              titleJa="学生アカウント管理"
+              cta="Kelola Akun"
             />
           </div>
 

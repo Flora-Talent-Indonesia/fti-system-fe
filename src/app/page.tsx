@@ -2,9 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 const PORTAL_ITEMS = [
-  { label: "LPK MITRA", href: "/lpk-mitra", desc: "Bahasa Indonesia" },
-  { label: "FTI", href: "/fti", desc: "Indonesia + 日本語" },
-  { label: "YS", href: "/ys", desc: "日本語 + English" },
+  { label: "LPK MITRA", href: "/lpk-mitra"},
+  { label: "FTI", href: "/fti"},
+  { label: "YS", href: "/ys"},
+  { label: "Daftar Siswa", href: "/daftar-pribadi"},
 ] as const;
 
 export default function HomePage() {
@@ -46,14 +47,9 @@ export default function HomePage() {
         </div>
 
         <div className="w-full space-y-4">
-          {PORTAL_ITEMS.map(({ label, href, desc }) => (
+          {PORTAL_ITEMS.map(({ label, href }) => (
             <Link key={label} href={href} className="portal-btn block text-center">
-              <span>
-                {label}
-                <span className="block text-[9px] font-normal normal-case tracking-normal text-text-gray mt-1">
-                  {desc}
-                </span>
-              </span>
+              <span>{label}</span>
             </Link>
           ))}
         </div>
