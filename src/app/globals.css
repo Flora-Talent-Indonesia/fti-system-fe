@@ -41,6 +41,79 @@ body {
   font-family: var(--font-inter), system-ui, sans-serif;
 }
 
+/* Admin dashboard wide tables — borders stay visible with sticky columns */
+.admin-data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-top: 1px solid #64748b;
+  border-left: 1px solid #64748b;
+}
+
+.admin-data-table :is(th, td) {
+  border-right: 1px solid #94a3b8;
+  border-bottom: 1px solid #94a3b8;
+}
+
+.admin-data-table thead :is(th) {
+  border-bottom: 2px solid #64748b;
+}
+
+.admin-data-table :is(th, td).border-dashed {
+  border-style: solid !important;
+}
+
+.admin-data-table :is(th, td)[class*='border-gray-100'],
+.admin-data-table :is(th, td)[class*='border-amber-100'],
+.admin-data-table :is(th, td)[class*='border-rose-100'],
+.admin-data-table :is(th, td)[class*='border-rose-200'] {
+  border-color: #94a3b8 !important;
+}
+
+.admin-data-table :is(th, td)[class*='sticky'] {
+  background-clip: padding-box;
+}
+
+.admin-data-table :is(th, td)[class*='sticky'][class*='left-'] {
+  border-right: 1px solid #64748b !important;
+}
+
+.admin-data-table :is(th, td)[class*='sticky'][class*='right-0'] {
+  border-left: 1px solid #64748b !important;
+}
+
+.admin-data-table thead :is(th)[class*='sticky'] {
+  border-bottom: 2px solid #64748b !important;
+}
+
+.admin-data-table .admin-sticky-split-right {
+  box-shadow: 4px 0 8px rgba(15, 23, 42, 0.08);
+}
+
+.admin-data-table .admin-sticky-split-left {
+  box-shadow: -4px 0 8px rgba(15, 23, 42, 0.08);
+}
+
+/* Custom scrollbar — persegi panjang (bukan pill) */
+.custom-scrollbar::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 0;
+  margin-left: 320px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 0;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+.custom-scrollbar-inset::-webkit-scrollbar-track {
+  margin-left: var(--scroll-track-inset-left, 320px);
+}
+
 .fti-pattern {
   background-color: var(--page-bg);
   background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 20c0-11.046 8.954-20 20-20v2c-9.941 0-18 8.059-18 18s8.059 18 18 18v2c-11.046 0-20-8.954-20-20zm-20 0c0-11.046 8.954-20 20-20v2C10.059 2 2 10.059 2 20s8.059 18 18 18v2c-11.046 0-20-8.954-20-20z' fill='%23FC809F' fill-opacity='1' fill-rule='evenodd'/%3E%3C/svg%3E");

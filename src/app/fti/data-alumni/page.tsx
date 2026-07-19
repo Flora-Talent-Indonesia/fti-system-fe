@@ -2,15 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Plus, Search } from "lucide-react";
+import { toast } from "react-hot-toast";
 import PortalPageShell from "@/components/PortalPageShell";
 import AlumniDataTable from "@/components/fti/AlumniDataTable";
-import { seedLpkStudentsIfEmpty, upsertLpkStudent } from "@/lib/lpk-student-storage";
-import type { LpkStudentRecord } from "@/types/lpk-student";
+import AlumniTableEditModal from "@/components/fti/AlumniTableEditModal";
+import {
+  nextNoPeserta,
+  seedLpkStudentsIfEmpty,
+  upsertLpkStudent,
+} from "@/lib/lpk-student-storage";
+import { createEmptyLpkStudent, type LpkStudentRecord } from "@/types/lpk-student";
 
 export default function DataAlumniPage() {
   const [students, setStudents] = useState<LpkStudentRecord[]>([]);
   const [search, setSearch] = useState("");
+  const [addingStudent, setAddingStudent] = useState<LpkStudentRecord | null>(null);
 
   useEffect(() => {
     const all = seedLpkStudentsIfEmpty();
@@ -24,9 +31,36 @@ export default function DataAlumniPage() {
       (s) =>
         s.nama_lengkap.toLowerCase().includes(q) ||
         s.no_peserta.toLowerCase().includes(q) ||
-        (s.asal_lpk || "").toLowerCase().includes(q)
+        (s.asal_lpk || "").toLowerCase().includes(q) ||
+        (s.nama_katakana || "").toLowerCase().includes(q)
     );
   }, [students, search]);
+
+  const handleAdd = () => {
+    setAddingStudent(
+      createEmptyLpkStudent({
+        no_peserta: nextNoPeserta(),
+        status: "match_job",
+        asal_lpk: "Flora Talent Indonesia",
+      })
+    );
+  };
+
+  const handleSaveExisting = (updated: LpkStudentRecord) => {
+    upsertLpkStudent(updated);
+    setStudents((prev) => {
+      const exists = prev.some((s) => s.id === updated.id);
+      if (exists) return prev.map((s) => (s.id === updated.id ? updated : s));
+      return [updated, ...prev];
+    });
+  };
+
+  const handleSaveNew = (created: LpkStudentRecord) => {
+    upsertLpkStudent(created);
+    setStudents((prev) => [created, ...prev]);
+    setAddingStudent(null);
+    toast.success("Data alumni ditambahkan.");
+  };
 
   return (
     <PortalPageShell>
@@ -50,33 +84,49 @@ export default function DataAlumniPage() {
             </div>
           </div>
 
-          <div className="relative group">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-pink"
-              size={18}
-            />
-            <input
-              type="text"
-              placeholder="Cari nama, no, atau LPK..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-transparent border-0 border-b border-gray-300 focus:outline-none focus:border-primary-pink w-full md:w-64"
-            />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative group">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-pink"
+                size={18}
+              />
+              <input
+                type="text"
+                placeholder="Cari nama, no, atau LPK..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 pr-4 py-2 bg-transparent border-0 border-b border-gray-300 focus:outline-none focus:border-primary-pink w-full sm:w-56"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAdd}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-white bg-[#fc809f] hover:bg-[#e56f8d] border border-[#fc809f] transition-colors"
+            >
+              <Plus size={16} />
+              Add Data
+            </button>
           </div>
         </header>
 
         <div className="mb-4 border border-primary-pink/20 bg-primary-pink-light px-4 py-3 text-sm text-gray-700">
-          <strong>Mode testing:</strong> Data semua alumni yang terdaftar di sistem. Anda dapat melihat asal alumni melalui kolom <strong>Jalur Pendaftaran</strong>.
+          <strong>Mode testing:</strong> Gunakan <strong>Add Data</strong> untuk menambah alumni baru.
+          Visa, COE, EKTKLN, dan Departure diisi sebagai tanggal.
         </div>
 
         <AlumniDataTable
           students={filtered}
           emptyMessage="Belum ada alumni yang terdaftar."
-          onSave={(updated) => {
-            upsertLpkStudent(updated);
-            setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-          }}
+          onSave={handleSaveExisting}
         />
+
+        {addingStudent && (
+          <AlumniTableEditModal
+            student={addingStudent}
+            onClose={() => setAddingStudent(null)}
+            onSave={handleSaveNew}
+          />
+        )}
       </main>
     </PortalPageShell>
   );

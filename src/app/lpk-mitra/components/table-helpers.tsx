@@ -9,20 +9,25 @@ type ThProps = {
   className?: string;
 };
 
+/** Header selaras progress-belajar / admin-data-table */
 export function SiswaTh({ jp, id, sticky, cv, className }: ThProps) {
   return (
     <th
       scope="col"
       className={cn(
-        "px-4 py-4 font-semibold border border-gray-200 text-xs text-gray-700 uppercase",
-        cv && "bg-pink-50/60",
+        "px-4 py-4 font-semibold border-b border-gray-200 border-r text-xs text-gray-700 uppercase",
+        cv ? "bg-pink-50/60" : "bg-gray-100",
         sticky,
         className
       )}
     >
       {jp}
-      <br />
-      <span className="text-[10px] text-gray-500 normal-case font-medium">{id}</span>
+      {id ? (
+        <>
+          <br />
+          <span className="text-[10px] text-gray-500 normal-case font-medium">{id}</span>
+        </>
+      ) : null}
     </th>
   );
 }
@@ -43,7 +48,7 @@ export function cell(v: string | number | null | undefined) {
   return v;
 }
 
-const TD_BASE = "px-4 py-4 border border-gray-200 text-gray-600";
+const TD_BASE = "px-4 py-3 border-r text-gray-600";
 
 type TdProps = {
   children: ReactNode;
@@ -58,10 +63,39 @@ export function SiswaTd({ children, sticky, cv, className }: TdProps) {
       className={cn(
         TD_BASE,
         cv && "bg-pink-50/30",
-        sticky && `${sticky} bg-white group-hover:bg-slate-50 z-10`,
+        sticky && `${sticky} bg-white group-hover:bg-gray-50 z-10`,
         className
       )}
     >
+      {children}
+    </td>
+  );
+}
+
+/** Header kolom Aksi sticky kanan — pola progress-belajar */
+export function SiswaActionTh({ label = "Aksi", jp }: { label?: string; jp?: string }) {
+  return (
+    <th
+      scope="col"
+      className="px-4 py-4 font-semibold border-b border-gray-200 sticky right-0 bg-gray-100 admin-sticky-split-left text-center text-xs uppercase z-20"
+    >
+      {jp ? (
+        <>
+          {jp}
+          <br />
+          <span className="text-[10px] text-gray-500 normal-case font-medium">{label}</span>
+        </>
+      ) : (
+        label
+      )}
+    </th>
+  );
+}
+
+/** Cell aksi sticky kanan */
+export function SiswaActionTd({ children }: { children: ReactNode }) {
+  return (
+    <td className="px-4 py-3 sticky right-0 bg-white admin-sticky-split-left group-hover:bg-gray-50 transition-colors text-center z-10">
       {children}
     </td>
   );

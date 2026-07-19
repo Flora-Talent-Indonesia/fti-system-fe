@@ -2,10 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 
 const PORTAL_ITEMS = [
-  { label: "LPK MITRA", href: "/lpk-mitra"},
-  { label: "FTI", href: "/fti"},
-  { label: "YS", href: "/ys"},
-  { label: "Daftar Siswa", href: "/daftar-pribadi"},
+  { label: "LPK MITRA", href: "/lpk-mitra" },
+  { label: "FTI", href: "/fti" },
+  { label: "YS", href: "/ys" },
+  { label: "Daftar Siswa", href: "/daftar-pribadi" },
+  { label: "Guru", href: "/guru-dashboard" },
 ] as const;
 
 export default function HomePage() {

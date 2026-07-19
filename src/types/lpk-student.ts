@@ -121,6 +121,19 @@ export type LpkStudentRecord = {
   pekerjaan: LpkPekerjaanItem[];
   timeline?: TimelineEvent[];
   job_placement?: JobPlacement;
+
+  /** Kolom tracking alumni (Data Alumni FTI) */
+  tanggal_mensetsu?: string;
+  tanggal_naitei?: string;
+  tsk?: string;
+  tanggal_rekrut?: string;
+  cert_jft_basic_a2?: string;
+  cert_ssw_idn?: string;
+  cert_ssw_jpn?: string;
+  dokumen_paspor?: string;
+  dokumen_visa?: string;
+  dokumen_coe?: string;
+  dokumen_ektkln?: string;
 };
 
 export function createEmptyLpkStudent(partial?: Partial<LpkStudentRecord>): LpkStudentRecord {
@@ -180,6 +193,17 @@ export function createEmptyLpkStudent(partial?: Partial<LpkStudentRecord>): LpkS
     sertifikat: [],
     pendidikan: [],
     pekerjaan: [],
+    tanggal_mensetsu: "",
+    tanggal_naitei: "",
+    tsk: "",
+    tanggal_rekrut: "",
+    cert_jft_basic_a2: "",
+    cert_ssw_idn: "",
+    cert_ssw_jpn: "",
+    dokumen_paspor: "",
+    dokumen_visa: "",
+    dokumen_coe: "",
+    dokumen_ektkln: "",
     ...partial,
   };
 }

@@ -10,8 +10,22 @@ import {
   ParentDataModal,
   PersonalDataModal,
 } from "@/app/lpk-mitra/components/SubDataModals";
-import { SiswaTh, SiswaTd, cell, fmtGender, fmtMata } from "@/app/lpk-mitra/components/table-helpers";
+import {
+  SiswaTh,
+  SiswaTd,
+  SiswaActionTh,
+  SiswaActionTd,
+  cell,
+  fmtGender,
+  fmtMata,
+} from "@/app/lpk-mitra/components/table-helpers";
 import type { LpkStudentRecord } from "@/types/lpk-student";
+
+const STICKY_TRACK_INSET = "calc((60px + 130px + 80px + 200px) * 0.9)";
+const EDIT_BTN =
+  "inline-flex items-center justify-center gap-1.5 w-full px-3 py-1.5 text-sm font-medium text-[#fc809f] hover:text-white bg-[#fc809f]/10 hover:bg-[#fc809f] rounded-lg transition-colors border border-[#fc809f]/20";
+const LINK_BTN =
+  "px-3 py-1.5 text-xs font-medium text-[#fc809f] bg-[#fc809f]/10 border border-[#fc809f]/20 hover:bg-[#fc809f]/20 rounded-lg transition-colors";
 
 type Props = {
   students: LpkStudentRecord[];
@@ -20,7 +34,7 @@ type Props = {
   allowDownload?: boolean;
 };
 
-/** Tabel profil siswa — kolom selaras admin-dashboard/profil-siswa (Jukyu), tema FTI pink. */
+/** Tabel profil siswa — UI selaras progress-belajar (admin-data-table). */
 export default function FtiProfilSiswaTable({
   students,
   onSave,
@@ -41,7 +55,7 @@ export default function FtiProfilSiswaTable({
 
   if (rows.length === 0) {
     return (
-      <div className="py-20 text-center bg-white border border-gray-200/60 shadow-sm">
+      <div className="py-20 text-center bg-white border border-gray-300 shadow-sm">
         <p className="text-gray-500">{emptyMessage}</p>
       </div>
     );
@@ -49,10 +63,13 @@ export default function FtiProfilSiswaTable({
 
   return (
     <>
-      <div className="bg-white border border-gray-200/60 relative shadow-sm">
-        <StickyHorizontalScroll>
-          <table className="w-full text-sm text-left whitespace-nowrap border-collapse">
-            <thead className="bg-gray-100 sticky top-0 z-10">
+      <div className="bg-white border border-gray-300 relative z-10 shadow-sm">
+        <StickyHorizontalScroll trackInsetLeft={STICKY_TRACK_INSET}>
+          <table
+            className="admin-data-table w-full text-sm text-left whitespace-nowrap"
+            style={{ zoom: "90%" }}
+          >
+            <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 shadow-sm">
               <tr>
                 <SiswaTh jp="NO" id="" sticky="sticky left-0 z-20 min-w-[60px] bg-gray-100" />
                 <SiswaTh
@@ -64,7 +81,7 @@ export default function FtiProfilSiswaTable({
                 <SiswaTh
                   jp="実習生本名"
                   id="Nama Peserta Magang"
-                  sticky="sticky left-[270px] z-20 min-w-[200px] bg-gray-100 shadow-[4px_0_10px_rgba(0,0,0,0.05)]"
+                  sticky="sticky left-[270px] z-20 min-w-[200px] bg-gray-100 admin-sticky-split-right"
                 />
                 <SiswaTh jp="カタカナ" id="Katakana" cv />
                 <SiswaTh jp="親のデータ" id="Data Orang Tua" cv />
@@ -105,20 +122,16 @@ export default function FtiProfilSiswaTable({
                 <SiswaTh jp="入国予定日" id="Perkiraan Masuk (Jepang)" />
                 <SiswaTh jp="出国日" id="Tanggal Keberangkatan" />
                 <SiswaTh jp="個人データファイル" id="File Data Diri" cv />
-                <th className="px-4 py-4 font-semibold border border-gray-200 sticky right-0 bg-gray-100 shadow-[-4px_0_10px_rgba(0,0,0,0.05)] text-center text-xs uppercase z-20">
-                  アクション
-                  <br />
-                  <span className="text-[10px] text-gray-500 normal-case font-medium">Action</span>
-                </th>
+                <SiswaActionTh jp="アクション" label="Action" />
               </tr>
             </thead>
             <tbody>
               {rows.map((s, index) => (
-                <tr key={s.id} className="bg-white hover:bg-slate-50 transition-colors group">
+                <tr key={s.id} className="bg-white hover:bg-gray-50 transition-colors group">
                   <SiswaTd sticky="sticky left-0" className="font-medium text-gray-900">
                     {index + 1}
                   </SiswaTd>
-                  <SiswaTd sticky="sticky left-[60px]" className="font-semibold text-primary-pink">
+                  <SiswaTd sticky="sticky left-[60px]" className="font-semibold text-[#fc809f]">
                     {s.no_peserta}
                   </SiswaTd>
                   <SiswaTd sticky="sticky left-[190px]">
@@ -131,25 +144,21 @@ export default function FtiProfilSiswaTable({
                     </div>
                   </SiswaTd>
                   <SiswaTd
-                    sticky="sticky left-[270px] shadow-[4px_0_10px_rgba(0,0,0,0.02)]"
+                    sticky="sticky left-[270px] admin-sticky-split-right"
                     className="font-medium text-gray-800"
                   >
                     {s.nama_lengkap}
                   </SiswaTd>
                   <SiswaTd cv>{cell(s.nama_katakana)}</SiswaTd>
                   <SiswaTd cv>
-                    <button
-                      type="button"
-                      onClick={() => setParentStudent(s)}
-                      className="px-3 py-1.5 text-xs font-medium text-primary-pink bg-primary-pink-light border border-primary-pink/30 hover:bg-primary-pink/20"
-                    >
+                    <button type="button" onClick={() => setParentStudent(s)} className={LINK_BTN}>
                       Lihat Data
                     </button>
                   </SiswaTd>
                   <SiswaTd cv>{cell(s.nama_panggilan)}</SiswaTd>
                   <SiswaTd>
                     {s.angkatan ? (
-                      <span className="bg-primary-pink-light text-primary-pink text-xs px-2 py-1 border border-primary-pink/30">
+                      <span className="bg-[#fc809f]/10 text-[#fc809f] text-xs px-2 py-1 border border-[#fc809f]/30">
                         {s.angkatan}
                       </span>
                     ) : (
@@ -158,9 +167,14 @@ export default function FtiProfilSiswaTable({
                   </SiswaTd>
                   <SiswaTd cv>{cell(s.kewarganegaraan)}</SiswaTd>
                   <SiswaTd>{cell(s.tanggal_lahir)}</SiswaTd>
-                  <SiswaTd>{cell(s.umur)}{s.umur ? " thn" : ""}</SiswaTd>
+                  <SiswaTd>
+                    {cell(s.umur)}
+                    {s.umur ? " thn" : ""}
+                  </SiswaTd>
                   <SiswaTd>{fmtGender(s.jenis_kelamin)}</SiswaTd>
-                  <SiswaTd cv className="font-semibold">{cell(s.golongan_darah)}</SiswaTd>
+                  <SiswaTd cv className="font-semibold">
+                    {cell(s.golongan_darah)}
+                  </SiswaTd>
                   <SiswaTd>{cell(s.status_pernikahan)}</SiswaTd>
                   <SiswaTd>{cell(s.agama)}</SiswaTd>
                   <SiswaTd>{cell(s.asal)}</SiswaTd>
@@ -176,15 +190,21 @@ export default function FtiProfilSiswaTable({
                     ) : allowDownload ? (
                       <DownloadFileButton filename={s.mcu_pdf} studentName={s.nama_lengkap} />
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-xs text-primary-pink">
+                      <span className="inline-flex items-center gap-1 text-xs text-[#fc809f]">
                         <Eye size={12} />
                         {s.mcu_pdf}
                       </span>
                     )}
                   </SiswaTd>
                   <SiswaTd cv>{cell(s.mcu)}</SiswaTd>
-                  <SiswaTd>{cell(s.berat_badan)}{s.berat_badan ? " kg" : ""}</SiswaTd>
-                  <SiswaTd>{cell(s.tinggi_badan)}{s.tinggi_badan ? " cm" : ""}</SiswaTd>
+                  <SiswaTd>
+                    {cell(s.berat_badan)}
+                    {s.berat_badan ? " kg" : ""}
+                  </SiswaTd>
+                  <SiswaTd>
+                    {cell(s.tinggi_badan)}
+                    {s.tinggi_badan ? " cm" : ""}
+                  </SiswaTd>
                   <SiswaTd cv>{fmtMata(s.mata_kiri, s.mata_kanan)}</SiswaTd>
                   <SiswaTd cv>{cell(s.berkacamata)}</SiswaTd>
                   <SiswaTd cv>{cell(s.tato)}</SiswaTd>
@@ -199,11 +219,7 @@ export default function FtiProfilSiswaTable({
                   <SiswaTd className="font-medium text-gray-800">{cell(s.nama_perusahaan)}</SiswaTd>
                   <SiswaTd>{cell(s.jenis_pekerjaan)}</SiswaTd>
                   <SiswaTd cv>
-                    <button
-                      type="button"
-                      onClick={() => setCertStudent(s)}
-                      className="px-3 py-1.5 text-xs font-medium text-primary-pink bg-primary-pink-light border border-primary-pink/30"
-                    >
+                    <button type="button" onClick={() => setCertStudent(s)} className={LINK_BTN}>
                       Lihat Sertifikat
                     </button>
                   </SiswaTd>
@@ -212,25 +228,16 @@ export default function FtiProfilSiswaTable({
                   <SiswaTd>{cell(s.perkiraan_masuk_jepang)}</SiswaTd>
                   <SiswaTd>{cell(s.tanggal_keberangkatan)}</SiswaTd>
                   <SiswaTd cv>
-                    <button
-                      type="button"
-                      onClick={() => setPersonalStudent(s)}
-                      className="px-3 py-1.5 text-xs font-medium text-primary-pink bg-primary-pink-light border border-primary-pink/30"
-                    >
+                    <button type="button" onClick={() => setPersonalStudent(s)} className={LINK_BTN}>
                       Lihat Data Diri
                     </button>
                   </SiswaTd>
-                  <td className="px-4 py-4 border border-gray-200 sticky right-0 bg-white group-hover:bg-slate-50 shadow-[-4px_0_10px_rgba(0,0,0,0.02)] text-center z-10">
-                    <button
-                      type="button"
-                      onClick={() => setEditStudent(s)}
-                      className="inline-flex items-center justify-center gap-1.5 w-full px-3 py-1.5 text-sm font-medium text-primary-pink hover:text-white bg-primary-pink-light hover:bg-primary-pink border border-primary-pink/30 transition-colors"
-                      title="Edit Data"
-                    >
+                  <SiswaActionTd>
+                    <button type="button" onClick={() => setEditStudent(s)} className={EDIT_BTN} title="Edit Data">
                       <Pencil size={14} />
                       Edit
                     </button>
-                  </td>
+                  </SiswaActionTd>
                 </tr>
               ))}
             </tbody>
