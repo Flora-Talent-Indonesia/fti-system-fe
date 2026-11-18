@@ -1,6 +1,7 @@
 import type { CVData } from "@/components/cv-form/types";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 import { createEmptyLpkStudent } from "@/types/lpk-student";
+import { isKeluargaFilled, isPendidikanFilled, isPekerjaanFilled, isSertifikatFilled } from "@/lib/cv-slots";
 
 function mapJenisKelamin(v: string): string {
   if (v === "Laki-laki") return "L";
@@ -49,6 +50,9 @@ export function cvDataToLpkStudent(
     kode_pos: info.kode_pos,
     telepon: info.nomor_telepon,
     email: info.email,
+    kontak_darurat_nama: info.kontak_darurat_nama,
+    kontak_darurat_hubungan: info.kontak_darurat_hubungan,
+    kontak_darurat_telepon: info.kontak_darurat_telepon,
     tanggal_masuk_pelatihan: cv.meta.tanggal_pembuatan_cv,
     tinggi_badan: fisik.tinggi_badan,
     berat_badan: fisik.berat_badan,
@@ -63,40 +67,65 @@ export function cvDataToLpkStudent(
     buta_warna: fisik.buta_warna,
     patah_tulang: fisik.riwayat_patah_tulang,
     hobi: fisik.hobi,
+    tempat_lahir: info.tempat_lahir,
+    tangan_dominan: info.tangan_dominan,
+    minum_alkohol: fisik.minum_alkohol,
+    periode_luar_negeri: cv.catatan?.periode_luar_negeri ?? "",
+    tujuan_luar_negeri: cv.catatan?.tujuan_luar_negeri ?? "",
+    sisa_hari_tokutei: cv.catatan?.sisa_hari_tokutei ?? "",
+    sisa_tahun: cv.catatan?.sisa_tahun ?? "",
+    sisa_bulan: cv.catatan?.sisa_bulan ?? "",
+    tujuan_ke_jepang: cv.catatan?.tujuan_ke_jepang ?? "",
+    komentar_pewawancara: cv.catatan?.komentar_pewawancara ?? "",
+    keterangan_medis_status: cv.catatan?.keterangan_medis_status ?? "",
+    keterangan_medis: cv.catatan?.keterangan_medis ?? "",
     dokumen_ktp: cv.dokumen.ktp,
+    dokumen_ktp_ortu: cv.dokumen.ktp_ortu,
     dokumen_kk: cv.dokumen.kk,
     dokumen_akte: cv.dokumen.akte_kelahiran,
+    dokumen_paspor_file: cv.dokumen.paspor,
     dokumen_ijazah: cv.dokumen.ijazah_terakhir,
-    pendidikan: cv.pendidikan.map((p) => ({
+    dokumen_skck: cv.dokumen.skck,
+    dokumen_perjanjian: cv.dokumen.surat_perjanjian,
+    mcu_pdf: cv.dokumen.mcu,
+    pendidikan: cv.pendidikan.filter(isPendidikanFilled).map((p) => ({
       nama_sekolah: p.nama_sekolah,
       tingkat_pendidikan: p.tingkat_pendidikan,
       jurusan: p.jurusan,
       bulan_masuk: p.bulan_masuk,
       tahun_masuk: p.tahun_masuk,
+      tanggal_masuk: p.tanggal_masuk,
       bulan_lulus: p.bulan_lulus,
       tahun_lulus: p.tahun_lulus,
+      tanggal_lulus: p.tanggal_lulus,
     })),
-    pekerjaan: cv.pekerjaan.map((p) => ({
+    pekerjaan: cv.pekerjaan.filter(isPekerjaanFilled).map((p) => ({
       nama_perusahaan: p.nama_perusahaan,
       posisi_pekerjaan: p.posisi_pekerjaan,
       status_pekerjaan: p.status_pekerjaan,
+      jenis_pekerjaan: p.jenis_pekerjaan,
+      deskripsi_pekerjaan: p.deskripsi_pekerjaan,
       bulan_mulai: p.bulan_mulai,
       tahun_mulai: p.tahun_mulai,
+      tanggal_mulai: p.tanggal_mulai,
       bulan_selesai: p.bulan_selesai,
       tahun_selesai: p.tahun_selesai,
+      tanggal_selesai: p.tanggal_selesai,
     })),
-    sertifikat: cv.sertifikat.map((s) => ({
+    sertifikat: cv.sertifikat.filter(isSertifikatFilled).map((s) => ({
       nama_sertifikat: s.nama_sertifikat,
       status_kelulusan: s.status_kelulusan === "Lulus" ? 1 : 0,
       score: s.keterangan_skor,
       bulan_diperoleh: s.bulan_diperoleh,
       tahun_diperoleh: s.tahun_diperoleh,
+      tanggal_diperoleh: s.tanggal_diperoleh,
       sertifikat: s.foto_sertifikat,
     })),
     sertifikat_dimiliki: cv.sertifikat
+      .filter(isSertifikatFilled)
       .map((s) => s.nama_sertifikat)
       .filter(Boolean),
-    keluarga: cv.keluarga.map((k) => ({
+    keluarga: cv.keluarga.filter(isKeluargaFilled).map((k) => ({
       hubungan: k.hubungan,
       nama: k.nama_anggota,
       umur: k.umur,
@@ -115,9 +144,14 @@ export function lpkStudentToCvData(student: LpkStudentRecord): CVData {
     },
     dokumen: {
       ktp: student.dokumen_ktp,
+      ktp_ortu: student.dokumen_ktp_ortu,
       kk: student.dokumen_kk,
       akte_kelahiran: student.dokumen_akte,
+      paspor: student.dokumen_paspor_file,
       ijazah_terakhir: student.dokumen_ijazah,
+      skck: student.dokumen_skck,
+      mcu: student.mcu_pdf,
+      surat_perjanjian: student.dokumen_perjanjian,
     },
     informasi_dasar: {
       nik: student.nik,
@@ -141,6 +175,11 @@ export function lpkStudentToCvData(student: LpkStudentRecord): CVData {
       kode_pos: student.kode_pos,
       nomor_telepon: student.telepon,
       email: student.email,
+      kontak_darurat_nama: student.kontak_darurat_nama,
+      kontak_darurat_hubungan: student.kontak_darurat_hubungan,
+      kontak_darurat_telepon: student.kontak_darurat_telepon,
+      tempat_lahir: student.tempat_lahir ?? "",
+      tangan_dominan: student.tangan_dominan ?? "",
     },
     fisik_kesehatan: {
       tinggi_badan: student.tinggi_badan,
@@ -156,6 +195,7 @@ export function lpkStudentToCvData(student: LpkStudentRecord): CVData {
       buta_warna: student.buta_warna,
       riwayat_patah_tulang: student.patah_tulang,
       hobi: student.hobi,
+      minum_alkohol: student.minum_alkohol ?? "",
     },
     pendidikan: (student.pendidikan ?? []).map((p, i) => ({
       id: `p-${i}`,
@@ -164,18 +204,24 @@ export function lpkStudentToCvData(student: LpkStudentRecord): CVData {
       jurusan: p.jurusan ?? "",
       bulan_masuk: p.bulan_masuk ?? "",
       tahun_masuk: p.tahun_masuk ?? "",
+      tanggal_masuk: p.tanggal_masuk ?? "",
       bulan_lulus: p.bulan_lulus ?? "",
       tahun_lulus: p.tahun_lulus ?? "",
+      tanggal_lulus: p.tanggal_lulus ?? "",
     })),
     pekerjaan: (student.pekerjaan ?? []).map((p, i) => ({
       id: `w-${i}`,
       nama_perusahaan: p.nama_perusahaan ?? "",
       posisi_pekerjaan: p.posisi_pekerjaan ?? "",
       status_pekerjaan: p.status_pekerjaan ?? "",
+      jenis_pekerjaan: p.jenis_pekerjaan ?? "",
+      deskripsi_pekerjaan: p.deskripsi_pekerjaan ?? "",
       bulan_mulai: p.bulan_mulai ?? "",
       tahun_mulai: p.tahun_mulai ?? "",
+      tanggal_mulai: p.tanggal_mulai ?? "",
       bulan_selesai: p.bulan_selesai ?? "",
       tahun_selesai: p.tahun_selesai ?? "",
+      tanggal_selesai: p.tanggal_selesai ?? "",
     })),
     sertifikat: (student.sertifikat ?? []).map((s, i) => ({
       id: `s-${i}`,
@@ -184,6 +230,7 @@ export function lpkStudentToCvData(student: LpkStudentRecord): CVData {
       keterangan_skor: s.score ?? "",
       bulan_diperoleh: s.bulan_diperoleh ?? "",
       tahun_diperoleh: s.tahun_diperoleh ?? "",
+      tanggal_diperoleh: s.tanggal_diperoleh ?? "",
       foto_sertifikat: s.sertifikat ?? "",
     })),
     keluarga: (student.keluarga ?? []).map((k, i) => ({
@@ -193,5 +240,17 @@ export function lpkStudentToCvData(student: LpkStudentRecord): CVData {
       umur: String(k.umur ?? ""),
       pekerjaan: k.status_pekerjaan ?? "",
     })),
+    catatan: {
+      periode_luar_negeri: student.periode_luar_negeri ?? "",
+      tujuan_luar_negeri: student.tujuan_luar_negeri ?? "",
+      sisa_hari_tokutei: student.sisa_hari_tokutei ?? "",
+      sisa_tahun: student.sisa_tahun ?? "",
+      sisa_bulan: student.sisa_bulan ?? "",
+      tujuan_ke_jepang: student.tujuan_ke_jepang ?? "",
+      komentar_pewawancara: student.komentar_pewawancara ?? "",
+      keterangan_medis_status: student.keterangan_medis_status ?? "",
+      keterangan_medis: student.keterangan_medis ?? "",
+    },
+    program: student.program ?? "",
   };
 }

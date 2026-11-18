@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ExternalLink, Search, X } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
+import SearchField from "@/components/SearchField";
 import { ftiStudentProfileUrl } from "@/lib/lpk-student-storage";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 
@@ -56,15 +57,7 @@ export default function AssignStudentModal({
         </div>
 
         <div className="px-6 py-3 border-b border-gray-100">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari nama / no. peserta / LPK"
-              className="input-field pl-9"
-            />
-          </div>
+          <SearchField variant="box" value={search} onChange={setSearch} />
         </div>
 
         <div className="overflow-y-auto flex-1 divide-y divide-gray-100">

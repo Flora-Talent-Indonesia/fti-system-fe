@@ -2,21 +2,24 @@
 
 import { Download, X } from "lucide-react";
 import DownloadFileButton from "@/components/lpk/DownloadFileButton";
+import { SUPPORTING_DOCS } from "@/lib/supporting-docs";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 
 function ModalShell({
   title,
   onClose,
+  wide = false,
   children,
 }: {
   title: string;
   onClose: () => void;
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="absolute inset-0" onClick={onClose} aria-hidden />
-      <div className="relative z-10 w-full max-w-lg max-h-[85vh] overflow-y-auto bg-white border border-gray-200 shadow-xl">
+      <div className={`relative z-10 w-full max-h-[85vh] overflow-x-hidden overflow-y-auto bg-white border border-gray-200 shadow-xl ${wide ? "max-w-4xl" : "max-w-lg"}`}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/80 sticky top-0">
           <h2 className="text-lg font-bold text-gray-900">{title}</h2>
           <button type="button" onClick={onClose} className="p-2 text-gray-400 hover:text-gray-700">
@@ -109,27 +112,24 @@ export function PersonalDataModal({
   onClose: () => void;
   allowDownload?: boolean;
 }) {
-  const docs = [
-    { label: "KTP", value: student.dokumen_ktp },
-    { label: "KK (Kartu Keluarga)", value: student.dokumen_kk },
-    { label: "Akte Kelahiran", value: student.dokumen_akte },
-    { label: "Ijazah Terakhir", value: student.dokumen_ijazah },
-    { label: "MCU", value: student.mcu_pdf },
-  ];
+  const docs = SUPPORTING_DOCS.map((doc) => ({
+    label: doc.label,
+    value: String(student[doc.studentKey] ?? ""),
+  }));
 
   return (
-    <ModalShell title="File Data Diri" onClose={onClose}>
-      <ul className="space-y-2 text-sm">
+    <ModalShell title="File Data Diri" onClose={onClose} wide>
+      <ul className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
         {docs.map((d) => (
           <li
             key={d.label}
-            className="flex items-center justify-between gap-3 border border-gray-200 px-3 py-2"
+            className="flex min-w-0 flex-col items-start gap-2 border border-gray-200 px-3 py-2"
           >
-            <span className="font-medium shrink-0">{d.label}</span>
+            <span className="font-medium leading-snug">{d.label}</span>
             {allowDownload && d.value ? (
               <DownloadFileButton filename={d.value} studentName={student.nama_lengkap} />
             ) : (
-              <span className="text-gray-600 truncate">{d.value || "Belum diunggah"}</span>
+              <span className="break-words text-gray-600">{d.value || "Belum diunggah"}</span>
             )}
           </li>
         ))}

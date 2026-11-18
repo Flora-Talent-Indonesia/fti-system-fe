@@ -5,8 +5,10 @@ import { createPortal } from "react-dom";
 import { Upload, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { FormField, FormSelect } from "@/components/cv-form/components/FormControls";
+import { SIM_JEPANG_OPTIONS, estimasiPulang } from "@/lib/placement";
 import { FileRuleTooltip } from "@/components/cv-form/components/FileRuleTooltip";
 import SectionPanel from "@/components/lpk/SectionPanel";
+import AlumniFullDataModal from "@/components/fti/AlumniFullDataModal";
 import { PHOTO_ACCEPT_INPUT, TOOLTIP_PHOTO_UPLOAD, isAllowedPhotoUpload } from "@/components/cv-form/file-upload-rules";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 
@@ -33,6 +35,7 @@ export default function AlumniTableEditModal({
 }) {
   const [draft, setDraft] = useState(student);
   const [mounted, setMounted] = useState(false);
+  const [showDataDiri, setShowDataDiri] = useState(false);
   const [sekolah, setSekolah] = useState(student.pendidikan?.[0]?.nama_sekolah ?? "");
 
   useEffect(() => setMounted(true), []);
@@ -96,7 +99,18 @@ export default function AlumniTableEditModal({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50/30">
-          <SectionPanel title="Identitas">
+          <SectionPanel
+            title="Identitas"
+            extraHeader={
+              <button
+                type="button"
+                onClick={() => setShowDataDiri(true)}
+                className="border border-[#fc809f] bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-[#c2185b] hover:bg-[#fff5f8]"
+              >
+                Data Diri
+              </button>
+            }
+          >
             <div className="grid md:grid-cols-[160px_1fr] gap-6">
               <div>
                 <div className="w-32 h-40 border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center">
@@ -220,6 +234,51 @@ export default function AlumniTableEditModal({
             </div>
           </SectionPanel>
 
+          <SectionPanel title="Setelah masuk Jepang">
+            <div className="grid md:grid-cols-2 gap-4">
+              <FormField
+                label="Perkiraan masuk Jepang"
+                type="date"
+                value={draft.perkiraan_masuk_jepang}
+                onChange={(v) => patch({ perkiraan_masuk_jepang: v })}
+              />
+              <FormSelect
+                label="N3"
+                value={draft.n3}
+                onChange={(v) => patch({ n3: v })}
+                options={[
+                  { value: "", label: "Belum" },
+                  { value: "punya", label: "Punya" },
+                  { value: "tidak", label: "Tidak punya" },
+                ]}
+              />
+              <FormSelect
+                label="SIM Jepang"
+                value={draft.sim_jepang}
+                onChange={(v) => patch({ sim_jepang: v })}
+                options={SIM_JEPANG_OPTIONS}
+              />
+              <FormSelect
+                label="Program"
+                value={draft.program}
+                onChange={(v) => patch({ program: v })}
+                options={[
+                  { value: "", label: "Belum" },
+                  { value: "ikusei", label: "Ikusei Shuro (pulang +3 tahun)" },
+                  { value: "tg", label: "Tokutei Ginou (pulang +5 tahun)" },
+                ]}
+              />
+              <FormField
+                label="帰国 / Estimasi pulang"
+                value={draft.estimasi_pulang?.trim() || estimasiPulang({ ...draft, estimasi_pulang: "" })}
+                onChange={(v) => patch({ estimasi_pulang: v })}
+                autoUppercase={false}
+                placeholder="Tahun, contoh 2030"
+                hint="Kosongkan untuk memakai hitungan program dan tanggal masuk."
+              />
+            </div>
+          </SectionPanel>
+
           <SectionPanel title="Dokumen Keberangkatan">
             <div className="grid md:grid-cols-2 gap-4">
               <FormField
@@ -270,6 +329,7 @@ export default function AlumniTableEditModal({
           </button>
         </div>
       </div>
+      {showDataDiri ? <AlumniFullDataModal student={draft} onClose={() => setShowDataDiri(false)} /> : null}
     </div>,
     document.body
   );

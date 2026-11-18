@@ -14,6 +14,8 @@ import {
   statusSiswaColor,
   statusSiswaLabel,
 } from "@/lib/alumni-display-utils";
+import { namaPengirim } from "@/lib/placement";
+import { SUPPORTING_DOCS } from "@/lib/supporting-docs";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 
 const TABS = [
@@ -72,12 +74,12 @@ export default function AlumniFullDataModal({
   const sColor = statusSiswaColor(student.status);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="absolute inset-0" onClick={onClose} aria-hidden />
       <div className="relative z-10 w-full max-w-6xl max-h-[92vh] bg-white border border-gray-200 shadow-2xl flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/80 flex-shrink-0">
           <div className="min-w-0">
-            <h2 className="text-xl font-serif text-gray-900">Data Lengkap Alumni</h2>
+            <h2 className="text-xl font-serif text-gray-900">Data Diri</h2>
             <p className="text-sm text-gray-500 mt-0.5 truncate">
               {student.nama_lengkap} · {student.no_peserta}
             </p>
@@ -126,7 +128,7 @@ export default function AlumniFullDataModal({
                     )}
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
-                    <ViewField label="No Peserta" value={student.no_peserta} />
+                    <ViewField label="ID Peserta" value={student.no_peserta} />
                     <ViewField label="NIK" value={student.nik} />
                     <ViewField label="Angkatan" value={student.angkatan} />
                     <ViewField label="Nama Lengkap" value={student.nama_lengkap} />
@@ -149,6 +151,9 @@ export default function AlumniFullDataModal({
                   <ViewField label="Kode Pos" value={student.kode_pos} />
                   <ViewField label="Telepon" value={student.telepon} />
                   <ViewField label="Email" value={student.email} />
+                  <ViewField label="Kontak Darurat" value={student.kontak_darurat_nama} />
+                  <ViewField label="Hubungan" value={student.kontak_darurat_hubungan} />
+                  <ViewField label="Telepon Darurat" value={student.kontak_darurat_telepon} />
                   <ViewField label="Alamat" value={student.alamat} className="md:col-span-2" />
                 </div>
               </SectionPanel>
@@ -182,7 +187,7 @@ export default function AlumniFullDataModal({
                   <ViewField label="Tingkatan Pembelajaran" value={student.tingkatan_pembelajaran} />
                   <ViewField label="Asal LPK" value={student.asal_lpk} />
                   <ViewField label="Jalur Pendaftaran" value={fmtJalurPendaftaran(student.asal_lpk)} />
-                  <ViewField label="Nama SO" value={student.nama_so} />
+                  <ViewField label="Nama Pengirim" value={namaPengirim(student)} />
                   <ViewField label="Nama Kumiai" value={student.nama_kumiai} />
                   <ViewField label="Program / Jenis Pekerjaan" value={student.jenis_pekerjaan} />
                   <ViewField label="Nama Perusahaan (Di Jepang)" value={getNamaPerusahaan(student)} />
@@ -320,43 +325,25 @@ export default function AlumniFullDataModal({
           {tab === "dokumen" && (
             <div className="space-y-6">
               <SectionPanel title="Dokumen Pendukung">
-                <div className="grid md:grid-cols-2 gap-4">
-                  {(
-                    [
-                      { key: "dokumen_ktp", label: "KTP" },
-                      { key: "dokumen_kk", label: "Kartu Keluarga (KK)" },
-                      { key: "dokumen_akte", label: "Akte Kelahiran" },
-                      { key: "dokumen_ijazah", label: "Ijazah Terakhir" },
-                    ] as const
-                  ).map(({ key, label }) => (
-                    <div key={key}>
-                      <p className="text-xs font-semibold tracking-wide text-gray-600 uppercase mb-1.5">{label}</p>
-                      {student[key] ? (
-                        allowDownload ? (
-                          <DownloadFileButton filename={student[key]} studentName={student.nama_lengkap} />
+                <p className="text-sm text-gray-500 mb-4">Semua berkas berupa hasil pindai PDF.</p>
+                <div className="grid gap-4 md:grid-cols-3">
+                  {SUPPORTING_DOCS.map((doc) => {
+                    const value = String(student[doc.studentKey] ?? "");
+                    return (
+                      <div key={doc.studentKey}>
+                        <p className="text-xs font-semibold tracking-wide text-gray-600 uppercase mb-1.5">{doc.label}</p>
+                        {value ? (
+                          allowDownload ? (
+                            <DownloadFileButton filename={value} studentName={student.nama_lengkap} />
+                          ) : (
+                            <ViewField label="" value={value} />
+                          )
                         ) : (
-                          <ViewField label="" value={student[key]} />
-                        )
-                      ) : (
-                        <ViewField label="" value="—" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </SectionPanel>
-              <SectionPanel title="Hasil Medical Check Up (MCU)">
-                <ViewField label="Hasil MCU" value={student.mcu} />
-                <div className="mt-4">
-                  <p className="text-xs font-semibold tracking-wide text-gray-600 uppercase mb-1.5">File MCU</p>
-                  {student.mcu_pdf ? (
-                    allowDownload ? (
-                      <DownloadFileButton filename={student.mcu_pdf} studentName={student.nama_lengkap} />
-                    ) : (
-                      <ViewField label="" value={student.mcu_pdf} />
-                    )
-                  ) : (
-                    <ViewField label="" value="—" />
-                  )}
+                          <ViewField label="" value="—" />
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </SectionPanel>
             </div>

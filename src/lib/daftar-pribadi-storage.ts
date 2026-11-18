@@ -16,6 +16,8 @@ export function mergeCvData(partial: Partial<CVData> | null | undefined): CVData
     pekerjaan: partial.pekerjaan ?? defaultCVData.pekerjaan,
     sertifikat: partial.sertifikat ?? defaultCVData.sertifikat,
     keluarga: partial.keluarga ?? defaultCVData.keluarga,
+    catatan: { ...defaultCVData.catatan, ...partial.catatan },
+    program: partial.program ?? defaultCVData.program,
   };
 }
 

@@ -45,13 +45,38 @@ function buildPrintHtml(bodyContent: string, title: string) {
       width: 210mm; min-height: 297mm; margin: 0 auto; padding: 28px 24px;
       page-break-after: always; break-after: page;
     }
+    .cv-print-page.cv-print-sheet { padding: 0; }
     .cv-print-page:last-child { page-break-after: auto; break-after: auto; }
+    [data-cv-sheet] {
+      width: 210mm !important;
+      height: 297mm !important;
+      min-height: 297mm !important;
+      max-height: 297mm !important;
+      overflow: hidden !important;
+      break-inside: avoid;
+      page-break-inside: avoid;
+      font-weight: 400;
+      font-synthesis: none;
+      text-rendering: geometricPrecision;
+    }
+    [data-cv-sheet] table {
+      border-collapse: separate !important;
+      border-spacing: 0 !important;
+      width: 100% !important;
+    }
+    [data-cv-sheet] td {
+      font-weight: 400 !important;
+      font-size: 11px !important;
+      line-height: 1.35 !important;
+      background-clip: padding-box;
+    }
     @media print {
       html, body { width: 210mm; }
       .cv-print-page {
         width: 210mm !important; min-height: 297mm !important;
         margin: 0 !important; padding: 28px 24px !important;
       }
+      .cv-print-page.cv-print-sheet { padding: 0 !important; }
     }
     @media screen {
       body { display: flex; flex-direction: column; align-items: center; background: #e5e7eb; padding: 20px 0; }
@@ -90,13 +115,35 @@ export async function exportCVToPDF(elementId: string, fileName = "CV") {
   const el = document.getElementById(elementId);
   if (!el) {
     console.error(`Element #${elementId} tidak ditemukan.`);
-    return;
+    return false;
   }
-  const clone = el.cloneNode(true) as HTMLElement;
-  await embedImagesAsDataUrl(clone);
+  return exportCvPages([el], fileName);
+}
+
+/** Satu atau banyak CV dibuka di jendela cetak. Browser menyimpannya sebagai PDF. */
+function collectSheets(root: HTMLElement): HTMLElement[] {
+  const sheets = Array.from(root.querySelectorAll<HTMLElement>("[data-cv-sheet]"));
+  return sheets.length ? sheets : [root];
+}
+
+export async function exportCvPages(pages: HTMLElement[], fileName = "CV") {
+  if (!pages.length) return false;
+  const chunks: string[] = [];
+  for (const page of pages) {
+    const clone = page.cloneNode(true) as HTMLElement;
+    await embedImagesAsDataUrl(clone);
+    const sheets = collectSheets(clone);
+    const split = sheets.length > 0 && sheets[0] !== clone;
+    for (const sheet of sheets) {
+      const pageClass = split ? "cv-print-page cv-print-sheet" : "cv-print-page";
+      const html = split ? sheet.outerHTML : clone.innerHTML;
+      chunks.push(`<div class="${pageClass}">${html}</div>`);
+      if (!split) break;
+    }
+  }
   const title = fileName.replace(/\.pdf$/i, "");
-  const bodyContent = `<div class="cv-print-page" id="${elementId}">${clone.innerHTML}</div>`;
-  const html = buildPrintHtml(bodyContent, title);
+  const html = buildPrintHtml(chunks.join(""), title);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   openPrintWindow(URL.createObjectURL(blob));
+  return true;
 }

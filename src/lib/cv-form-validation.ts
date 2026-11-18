@@ -1,5 +1,12 @@
-import type { CVData } from "@/components/cv-form/types";
+import type { CVData, Sertifikat } from "@/components/cv-form/types";
+import { isPdfFileName } from "@/components/cv-form/file-upload-rules";
 import { filterFilledPekerjaan } from "@/lib/pekerjaan-utils";
+import {
+  arrangePendidikan,
+  isKeluargaFilled,
+  isPendidikanFilled,
+  PENDIDIKAN_SLOTS,
+} from "@/lib/cv-slots";
 
 export type CvFormErrors = Record<string, string>;
 export const CV_MSG = "Harap pilih / isi field ini";
@@ -40,14 +47,17 @@ export function validateCvStep2(data: CVData): CvFormErrors {
 
 export function validateCvStep3(data: CVData): CvFormErrors {
   const e: CvFormErrors = {};
-  const needsJurusan = ["SMA", "SMK", "D3", "S1"];
-  if (data.pendidikan.length === 0) e["pendidikan-empty"] = "Tambahkan minimal 1 data pendidikan";
-  data.pendidikan.forEach((item) => {
+  const { slots, overflow } = arrangePendidikan(data.pendidikan);
+  const filled = [...slots, ...overflow].filter(isPendidikanFilled);
+  if (filled.length === 0) e["pendidikan-empty"] = "Isi minimal 1 jenjang pendidikan";
+  slots.forEach((item, index) => {
+    if (!isPendidikanFilled(item)) return;
+    const slot = PENDIDIKAN_SLOTS[index];
     if (!item.nama_sekolah.trim()) e[`pendidikan-${item.id}-nama_sekolah`] = CV_MSG;
-    if (!item.tingkat_pendidikan) e[`pendidikan-${item.id}-tingkat_pendidikan`] = CV_MSG;
-    if (needsJurusan.includes(item.tingkat_pendidikan) && !item.jurusan.trim()) {
-      e[`pendidikan-${item.id}-jurusan`] = CV_MSG;
+    if (slot.needsJurusan && !item.tingkat_pendidikan) {
+      e[`pendidikan-${item.id}-tingkat_pendidikan`] = CV_MSG;
     }
+    if (slot.needsJurusan && !item.jurusan.trim()) e[`pendidikan-${item.id}-jurusan`] = CV_MSG;
     if (!item.bulan_masuk) e[`pendidikan-${item.id}-bulan_masuk`] = CV_MSG;
     if (!item.tahun_masuk) e[`pendidikan-${item.id}-tahun_masuk`] = CV_MSG;
     if (!item.bulan_lulus) e[`pendidikan-${item.id}-bulan_lulus`] = CV_MSG;
@@ -60,7 +70,6 @@ export function validateCvStep4(data: CVData): CvFormErrors {
   const e: CvFormErrors = {};
   filterFilledPekerjaan(data.pekerjaan).forEach((item) => {
     if (!item.nama_perusahaan.trim()) e[`pekerjaan-${item.id}-nama_perusahaan`] = CV_MSG;
-    if (!item.posisi_pekerjaan.trim()) e[`pekerjaan-${item.id}-posisi_pekerjaan`] = CV_MSG;
     if (!item.status_pekerjaan) e[`pekerjaan-${item.id}-status_pekerjaan`] = CV_MSG;
     if (!item.bulan_mulai) e[`pekerjaan-${item.id}-bulan_mulai`] = CV_MSG;
     if (!item.tahun_mulai) e[`pekerjaan-${item.id}-tahun_mulai`] = CV_MSG;
@@ -70,14 +79,36 @@ export function validateCvStep4(data: CVData): CvFormErrors {
   return e;
 }
 
-export function validateCvStep5(_data: CVData): CvFormErrors {
-  return {};
+export function validateSertifikatRows(items: Sertifikat[]): CvFormErrors {
+  const e: CvFormErrors = {};
+  items.forEach((item) => {
+    const named = item.nama_sertifikat.trim().length > 0;
+    const started = [
+      item.status_kelulusan,
+      item.keterangan_skor,
+      item.bulan_diperoleh,
+      item.tahun_diperoleh,
+      item.tanggal_diperoleh,
+      item.foto_sertifikat,
+    ].some((value) => (value ?? "").trim().length > 0);
+    if (!named && !started) return;
+    if (!named) e[`sertifikat-${item.id}-nama_sertifikat`] = CV_MSG;
+    if (!isPdfFileName(item.foto_sertifikat)) {
+      e[`sertifikat-${item.id}-foto_sertifikat`] = "Setiap sertifikat wajib dilampiri file PDF.";
+    }
+  });
+  return e;
+}
+
+export function validateCvStep5(data: CVData): CvFormErrors {
+  return validateSertifikatRows(data.sertifikat);
 }
 
 export function validateCvStep6(data: CVData): CvFormErrors {
   const e: CvFormErrors = {};
-  if (data.keluarga.length === 0) e["keluarga-empty"] = "Tambahkan minimal 1 data keluarga";
-  data.keluarga.forEach((item) => {
+  const filled = data.keluarga.filter(isKeluargaFilled);
+  if (filled.length === 0) e["keluarga-empty"] = "Isi minimal 1 anggota keluarga";
+  filled.forEach((item) => {
     if (!item.hubungan) e[`keluarga-${item.id}-hubungan`] = CV_MSG;
     if (!item.nama_anggota.trim()) e[`keluarga-${item.id}-nama_anggota`] = CV_MSG;
     if (!item.umur?.trim()) e[`keluarga-${item.id}-umur`] = CV_MSG;
@@ -89,6 +120,11 @@ export function validateCvStep6(data: CVData): CvFormErrors {
   return e;
 }
 
+/** Tujuan, komentar, dan keterangan medis tidak wajib. */
+export function validateCvStep7(_data: CVData): CvFormErrors {
+  return {};
+}
+
 export const CV_STEP_VALIDATORS = [
   validateCvStep1,
   validateCvStep2,
@@ -96,6 +132,7 @@ export const CV_STEP_VALIDATORS = [
   validateCvStep4,
   validateCvStep5,
   validateCvStep6,
+  validateCvStep7,
 ];
 
 export function validateAllCvSteps(data: CVData): { errors: CvFormErrors; step: number } {
@@ -105,5 +142,5 @@ export function validateAllCvSteps(data: CVData): { errors: CvFormErrors; step: 
       return { errors, step: i + 1 };
     }
   }
-  return { errors: {}, step: 6 };
+  return { errors: {}, step: 7 };
 }

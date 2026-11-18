@@ -2,22 +2,35 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Search } from "lucide-react";
+import { ArrowLeft, Download, Plus } from "lucide-react";
+import { toast } from "react-hot-toast";
 import LpkMitraShell from "@/components/lpk/LpkMitraShell";
+import SearchField from "@/components/SearchField";
+import DataSiswaExportModal from "@/components/fti/DataSiswaExportModal";
+import StudentCvBatch from "@/components/fti/StudentCvBatch";
 import LpkSiswaTable, { LpkSiswaEmptyAction } from "../components/LpkSiswaTable";
 import { upsertLpkStudent, seedLpkStudentsIfEmpty } from "@/lib/lpk-student-storage";
 import { filterStudentsByLpkName } from "@/lib/fti-lpk-students";
+import { omitInactiveAccounts } from "@/lib/fti-student-account-storage";
+import { isAlumniByEntry } from "@/lib/placement";
 import type { LpkStudentRecord } from "@/types/lpk-student";
+
+function activePortalStudents(all: LpkStudentRecord[]) {
+  return omitInactiveAccounts(
+    filterStudentsByLpkName(all, LPK_PORTAL_NAME).filter((student) => !isAlumniByEntry(student)),
+  );
+}
 
 const LPK_PORTAL_NAME = "LPK Mitra Sukabumi";
 
 export default function LpkMitraSiswaPage() {
   const [students, setStudents] = useState<LpkStudentRecord[]>([]);
   const [search, setSearch] = useState("");
+  const [exportFormat, setExportFormat] = useState<"cv" | "excel" | null>(null);
+  const [cvQueue, setCvQueue] = useState<LpkStudentRecord[] | null>(null);
 
   useEffect(() => {
-    const all = seedLpkStudentsIfEmpty();
-    setStudents(filterStudentsByLpkName(all, LPK_PORTAL_NAME));
+    setStudents(activePortalStudents(seedLpkStudentsIfEmpty()));
   }, []);
 
   const filtered = useMemo(() => {
@@ -34,45 +47,41 @@ export default function LpkMitraSiswaPage() {
   }, [students, search]);
 
   const handleSave = (updated: LpkStudentRecord) => {
-    const list = upsertLpkStudent(updated);
-    setStudents(list);
+    setStudents(activePortalStudents(upsertLpkStudent(updated)));
   };
 
   return (
     <LpkMitraShell>
-      <main className="p-4 md:p-8">
-        <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <main className="px-4 pb-8 pt-8 md:px-8 md:pb-8 md:pt-10">
+        <header className="mb-5 flex shrink-0 flex-col justify-between gap-4 md:flex-row md:items-center">
           <div className="flex items-center gap-4">
             <Link
               href="/lpk-mitra"
-              className="p-3 bg-transparent hover:bg-gray-200/50 transition-colors border border-gray-300 text-gray-500 hover:text-gray-900"
+              className="border border-gray-300 bg-transparent p-2.5 text-gray-500 transition-colors hover:bg-gray-200/50 hover:text-gray-900"
             >
-              <ArrowLeft size={20} strokeWidth={1.5} />
+              <ArrowLeft size={18} strokeWidth={1.5} />
             </Link>
             <div>
-              <h1 className="text-3xl font-serif text-gray-900 tracking-wide mb-1">
+              <h1 className="font-serif text-3xl tracking-wide text-gray-900">
                 Kelola Siswa
               </h1>
-              <p className="text-xs font-medium text-gray-500 tracking-widest uppercase">
+              <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-gray-500">
                 Data peserta magang LPK Mitra — input oleh admin
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="relative group">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-pink"
-                size={18}
-              />
-              <input
-                type="text"
-                placeholder="Cari nama atau no. peserta..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-transparent border-0 border-b border-gray-300 focus:outline-none focus:border-primary-pink w-full md:w-64"
-              />
-            </div>
+            <SearchField className="w-full md:w-52" value={search} onChange={setSearch} />
+            <button
+              type="button"
+              onClick={() => setExportFormat("excel")}
+              className="flex h-11 w-11 items-center justify-center border border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50"
+              title="Unduh data siswa"
+              aria-label="Unduh data siswa"
+            >
+              <Download size={18} strokeWidth={1.5} />
+            </button>
             <Link
               href="/lpk-mitra/siswa/tambah"
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-pink text-white text-xs font-semibold uppercase tracking-widest hover:bg-primary-pink-hover transition-colors"
@@ -83,16 +92,32 @@ export default function LpkMitraSiswaPage() {
           </div>
         </header>
 
-        <div className="mb-4 border border-primary-pink/20 bg-primary-pink-light px-4 py-3 text-sm text-gray-700">
-          <strong>Mode testing:</strong> Semua data di tabel ini masih dummy untuk pengujian frontend.
-        </div>
-
         <LpkSiswaTable
           students={filtered}
           onSave={handleSave}
           emptyMessage="Belum ada siswa. Tambah siswa untuk memulai."
           emptyAction={<LpkSiswaEmptyAction />}
         />
+        {exportFormat && (
+          <DataSiswaExportModal
+            ftiStudents={[]}
+            mitraStudents={students}
+            initialSumber={LPK_PORTAL_NAME}
+            initialKelas="Semua"
+            initialFormat={exportFormat}
+            lockSumber
+            onExportCv={(list) => {
+              setCvQueue(list);
+              toast.success(
+                list.length === 1
+                  ? `CV ${list[0].nama_lengkap} dibuka untuk disimpan sebagai PDF.`
+                  : `${list.length} CV digabung. Simpan sebagai PDF dari jendela cetak.`,
+              );
+            }}
+            onClose={() => setExportFormat(null)}
+          />
+        )}
+        {cvQueue && <StudentCvBatch students={cvQueue} onDone={() => setCvQueue(null)} />}
       </main>
     </LpkMitraShell>
   );

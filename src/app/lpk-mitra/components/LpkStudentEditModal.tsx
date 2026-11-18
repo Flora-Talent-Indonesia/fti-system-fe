@@ -5,14 +5,23 @@ import { createPortal } from "react-dom";
 import { Upload, Wand2, X } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { FormField, FormSelect } from "@/components/cv-form/components/FormControls";
+import { NashiAruDuration, NashiAruText } from "@/components/cv-form/components/NashiAruFields";
+import { CATATAN_NASHI, displayNashiAruStatus } from "@/lib/cv-catatan";
 import { FileRuleTooltip } from "@/components/cv-form/components/FileRuleTooltip";
 import StepKeluarga from "@/components/cv-form/components/StepKeluarga";
 import StepSertifikat from "@/components/cv-form/components/StepSertifikat";
+import LpkProgramFields from "@/components/lpk/LpkProgramFields";
 import SectionPanel from "@/components/lpk/SectionPanel";
 import DocUploadField from "@/components/lpk/DocUploadField";
+import { SUPPORTING_DOCS } from "@/lib/supporting-docs";
 import { PHOTO_ACCEPT_INPUT, TOOLTIP_PHOTO_UPLOAD, isAllowedPhotoUpload } from "@/components/cv-form/file-upload-rules";
 import { lpkStudentToCvData } from "@/lib/cv-to-lpk-student";
+import { validateSertifikatRows } from "@/lib/cv-form-validation";
 import { toKatakana } from "@/lib/katakana-master";
+import { FTI_ANGKATAN_OPTIONS, FTI_KELAS_OPTIONS } from "@/data/dummy-fti-students";
+import { lembagaLabel } from "@/lib/placement";
+import { seedJobsIfEmpty } from "@/lib/job-storage";
+import type { Job } from "@/types";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 
 const TABS = [
@@ -21,6 +30,7 @@ const TABS = [
   { id: "sertifikat", label: "Sertifikat", icon: "🏆" },
   { id: "dokumen", label: "Dokumen & MCU", icon: "📎" },
   { id: "program", label: "Program & Jadwal", icon: "📅" },
+  { id: "pindahkan", label: "Pindahkan", icon: "↗" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -38,14 +48,49 @@ const ADA_TIDAK = [
   { value: "Tidak Ada", label: "無し / Tidak Ada" },
 ];
 
+function selectOptions(values: readonly string[], current: string) {
+  const list = current && !values.includes(current) ? [current, ...values] : [...values];
+  return list.map((value) => ({ value, label: value }));
+}
+
+function MatchingNotes({ studentId }: { studentId: string }) {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  useEffect(() => {
+    setJobs(seedJobsIfEmpty().filter((job) => job.assignedStudentIds?.includes(studentId)));
+  }, [studentId]);
+  if (jobs.length === 0) {
+    return <p className="mt-1 text-sm text-slate-500">Belum di-assign ke job.</p>;
+  }
+  return (
+    <ul className="mt-2 space-y-2 text-sm">
+      {jobs.map((job) => (
+        <li key={job.id} className="border border-slate-200 px-3 py-2">
+          <p>{job.title}</p>
+          <p className="text-slate-500">Mensetsu: {job.tanggalMansetsu || "—"}</p>
+          <p>Hasil: {job.mensetsuResults?.[studentId] || "belum"}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function LpkStudentEditModal({
   student,
   onClose,
   onSave,
+  scheduleEditable = false,
+  placementEditable = false,
+  interviewerCommentEditable = false,
 }: {
   student: LpkStudentRecord;
   onClose: () => void;
   onSave: (s: LpkStudentRecord) => void;
+  /** Tanggal pelatihan dan keberangkatan hanya diubah admin FTI. */
+  scheduleEditable?: boolean;
+  /** Angkatan, kelas, hasil, dan riwayat — diubah dari tabel FTI. */
+  placementEditable?: boolean;
+  /** Komentar pewawancara hanya diisi FTI. */
+  interviewerCommentEditable?: boolean;
 }) {
   const [draft, setDraft] = useState(student);
   const [tab, setTab] = useState<TabId>("biodata");
@@ -55,10 +100,48 @@ export default function LpkStudentEditModal({
 
   const patch = (p: Partial<LpkStudentRecord>) => setDraft((d) => ({ ...d, ...p }));
   const cv = lpkStudentToCvData(draft);
+  const tabs = placementEditable ? TABS : TABS.filter((item) => item.id !== "pindahkan");
+
+  const buildSaved = (source: LpkStudentRecord): LpkStudentRecord => {
+    const filledText = (value: unknown) => String(value ?? "").trim().length > 0;
+    return {
+      ...source,
+      keluarga: (source.keluarga ?? []).filter((item) =>
+        [item.hubungan, item.nama, item.umur, item.status_pekerjaan].some(filledText),
+      ),
+      asal_lpk: source.asal_lpk.trim() || student.asal_lpk || "LPK Mitra Sukabumi",
+      ...(scheduleEditable
+        ? {}
+        : {
+            tanggal_masuk_pelatihan: student.tanggal_masuk_pelatihan,
+            tanggal_kelulusan: student.tanggal_kelulusan,
+            perkiraan_masuk_jepang: student.perkiraan_masuk_jepang,
+            tanggal_keberangkatan: student.tanggal_keberangkatan,
+          }),
+    };
+  };
 
   const handleSave = () => {
-    onSave(draft);
+    const certErrors = validateSertifikatRows(lpkStudentToCvData(draft).sertifikat);
+    if (Object.keys(certErrors).length > 0) {
+      setTab("sertifikat");
+      toast.error("Setiap sertifikat yang diisi wajib dilampiri file PDF.");
+      return;
+    }
+    onSave(buildSaved(draft));
     toast.success("Data siswa disimpan.");
+    onClose();
+  };
+
+  const assignAlumni = () => {
+    const certErrors = validateSertifikatRows(lpkStudentToCvData(draft).sertifikat);
+    if (Object.keys(certErrors).length > 0) {
+      setTab("sertifikat");
+      toast.error("Setiap sertifikat yang diisi wajib dilampiri file PDF.");
+      return;
+    }
+    onSave(buildSaved({ ...draft, assigned_alumni: true }));
+    toast.success("Siswa dipindahkan ke Data Alumni. Seluruh data sebelumnya tetap tersimpan.");
     onClose();
   };
 
@@ -101,7 +184,7 @@ export default function LpkStudentEditModal({
         </div>
 
         <div className="flex border-b border-gray-200 bg-gray-50 overflow-x-auto flex-shrink-0">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -141,7 +224,7 @@ export default function LpkStudentEditModal({
                     </div>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
-                    <FormField label="No. Peserta" value={draft.no_peserta} onChange={(v) => patch({ no_peserta: v })} />
+                    <FormField label="ID Peserta" value={draft.no_peserta} onChange={(v) => patch({ no_peserta: v })} />
                     <FormField label="NIK" value={draft.nik} onChange={(v) => patch({ nik: v })} autoUppercase={false} />
                     <FormField label="Nama Lengkap" value={draft.nama_lengkap} onChange={(v) => patch({ nama_lengkap: v })} />
                     <div>
@@ -155,6 +238,16 @@ export default function LpkStudentEditModal({
                     </div>
                     <FormField label="Nama Panggilan" value={draft.nama_panggilan} onChange={(v) => patch({ nama_panggilan: v })} autoUppercase={false} />
                     <FormField label="Kewarganegaraan" value={draft.kewarganegaraan} onChange={(v) => patch({ kewarganegaraan: v })} autoUppercase={false} />
+                    <FormField label="出身地 / Tempat Lahir" value={draft.tempat_lahir ?? ""} onChange={(v) => patch({ tempat_lahir: v })} />
+                    <FormSelect
+                      label="利き手 / Tangan Dominan"
+                      value={draft.tangan_dominan ?? ""}
+                      onChange={(v) => patch({ tangan_dominan: v })}
+                      options={[
+                        { value: "右", label: "右 / Kanan" },
+                        { value: "左", label: "左 / Kiri" },
+                      ]}
+                    />
                     <FormField label="Tanggal Lahir" type="date" value={draft.tanggal_lahir} onChange={(v) => patch({ tanggal_lahir: v })} />
                     <FormField label="Umur" value={draft.umur} onChange={(v) => patch({ umur: v })} type="number" autoUppercase={false} />
                     <FormSelect label="Jenis Kelamin" value={draft.jenis_kelamin} onChange={(v) => patch({ jenis_kelamin: v })} options={GENDER} />
@@ -171,6 +264,9 @@ export default function LpkStudentEditModal({
                   <FormField label="Kode Pos" value={draft.kode_pos} onChange={(v) => patch({ kode_pos: v })} autoUppercase={false} />
                   <FormField label="Telepon" value={draft.telepon} onChange={(v) => patch({ telepon: v })} type="tel" autoUppercase={false} />
                   <FormField label="Email" value={draft.email} onChange={(v) => patch({ email: v })} type="email" autoUppercase={false} />
+                  <FormField label="Kontak Darurat" value={draft.kontak_darurat_nama} onChange={(v) => patch({ kontak_darurat_nama: v })} />
+                  <FormField label="Hubungan" value={draft.kontak_darurat_hubungan} onChange={(v) => patch({ kontak_darurat_hubungan: v })} autoUppercase={false} />
+                  <FormField label="Telepon Darurat" value={draft.kontak_darurat_telepon} onChange={(v) => patch({ kontak_darurat_telepon: v })} type="tel" autoUppercase={false} />
                   <FormField label="Alamat Lengkap" value={draft.alamat} onChange={(v) => patch({ alamat: v })} type="textarea" className="md:col-span-2" />
                 </div>
               </SectionPanel>
@@ -192,11 +288,59 @@ export default function LpkStudentEditModal({
                   <FormSelect label="Tato" value={draft.tato} onChange={(v) => patch({ tato: v })} options={ADA_TIDAK} />
                   <FormSelect label="Patah Tulang" value={draft.patah_tulang} onChange={(v) => patch({ patah_tulang: v })} options={ADA_TIDAK} />
                   <FormSelect label="Merokok" value={draft.merokok} onChange={(v) => patch({ merokok: v })} options={YA_TIDAK} />
+                  <FormSelect label="飲酒 / Minum Alkohol" value={draft.minum_alkohol ?? ""} onChange={(v) => patch({ minum_alkohol: v })} options={YA_TIDAK} />
                   {draft.merokok === "Ya" && (
                     <FormField label="Frekuensi Merokok" value={draft.frequensi_merokok} onChange={(v) => patch({ frequensi_merokok: v })} autoUppercase={false} />
                   )}
                   <FormField label="Hobi" value={draft.hobi} onChange={(v) => patch({ hobi: v })} className="md:col-span-2" autoUppercase={false} />
                   <FormField label="Tingkatan Pembelajaran" value={draft.tingkatan_pembelajaran} onChange={(v) => patch({ tingkatan_pembelajaran: v })} />
+                </div>
+              </SectionPanel>
+
+              <SectionPanel title="履歴書 / Tujuan & Keterangan">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <FormField label="渡航時期 / Kapan ke luar negeri" value={draft.periode_luar_negeri ?? ""} onChange={(v) => patch({ periode_luar_negeri: v })} type="textarea" autoUppercase={false} />
+                  <FormField label="渡航目的 / Tujuan" value={draft.tujuan_luar_negeri ?? ""} onChange={(v) => patch({ tujuan_luar_negeri: v })} type="textarea" autoUppercase={false} />
+                  <NashiAruDuration
+                    label="特定技能残日数 / Sisa Masa Kerja Tokutei Ginou"
+                    status={draft.sisa_hari_tokutei ?? ""}
+                    tahun={draft.sisa_tahun ?? ""}
+                    bulan={draft.sisa_bulan ?? ""}
+                    onStatus={(value) =>
+                      patch(
+                        value === CATATAN_NASHI
+                          ? { sisa_hari_tokutei: value, sisa_tahun: "", sisa_bulan: "" }
+                          : { sisa_hari_tokutei: value },
+                      )
+                    }
+                    onTahun={(value) => patch({ sisa_tahun: value })}
+                    onBulan={(value) => patch({ sisa_bulan: value })}
+                  />
+                  <NashiAruText
+                    label="Apakah sedang dalam perawatan medis atau mengonsumsi obat tertentu?"
+                    detailLabel="Obat atau perawatan"
+                    status={displayNashiAruStatus(draft.keterangan_medis_status, draft.keterangan_medis)}
+                    detail={
+                      displayNashiAruStatus(draft.keterangan_medis_status, draft.keterangan_medis) === CATATAN_NASHI
+                        ? ""
+                        : (draft.keterangan_medis ?? "")
+                    }
+                    onStatus={(value) =>
+                      patch(
+                        value === CATATAN_NASHI
+                          ? { keterangan_medis_status: value, keterangan_medis: "" }
+                          : {
+                              keterangan_medis_status: value,
+                              keterangan_medis: draft.keterangan_medis === CATATAN_NASHI ? "" : draft.keterangan_medis,
+                            },
+                      )
+                    }
+                    onDetail={(value) => patch({ keterangan_medis_status: "あり", keterangan_medis: value })}
+                  />
+                  <FormField label="日本での目標 / Tujuan ke Jepang" value={draft.tujuan_ke_jepang ?? ""} onChange={(v) => patch({ tujuan_ke_jepang: v })} type="textarea" rows={5} autoUppercase={false} className="md:col-span-2" />
+                  {interviewerCommentEditable ? (
+                    <FormField label="コメント / Komentar pewawancara" value={draft.komentar_pewawancara ?? ""} onChange={(v) => patch({ komentar_pewawancara: v })} type="textarea" rows={4} autoUppercase={false} hint="Hanya diisi FTI." className="md:col-span-2" />
+                  ) : null}
                 </div>
               </SectionPanel>
             </>
@@ -232,6 +376,7 @@ export default function LpkStudentEditModal({
                       score: s.keterangan_skor,
                       bulan_diperoleh: s.bulan_diperoleh,
                       tahun_diperoleh: s.tahun_diperoleh,
+                      tanggal_diperoleh: s.tanggal_diperoleh,
                       sertifikat: s.foto_sertifikat,
                     })),
                     sertifikat_dimiliki: sertifikat.map((s) => s.nama_sertifikat).filter(Boolean),
@@ -244,44 +389,100 @@ export default function LpkStudentEditModal({
           {tab === "dokumen" && (
             <div className="space-y-6">
               <SectionPanel title="Dokumen Pendukung">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <DocUploadField label="KTP" value={draft.dokumen_ktp} onChange={(v) => patch({ dokumen_ktp: v })} />
-                  <DocUploadField label="Kartu Keluarga (KK)" value={draft.dokumen_kk} onChange={(v) => patch({ dokumen_kk: v })} />
-                  <DocUploadField label="Akte Kelahiran" value={draft.dokumen_akte} onChange={(v) => patch({ dokumen_akte: v })} />
-                  <DocUploadField label="Ijazah Terakhir" value={draft.dokumen_ijazah} onChange={(v) => patch({ dokumen_ijazah: v })} />
-                </div>
-              </SectionPanel>
-              <SectionPanel title="Hasil Medical Check Up (MCU)">
-                <div className="max-w-md">
-                  <DocUploadField
-                    label="File Hasil MCU"
-                    value={draft.mcu_pdf}
-                    onChange={(v) => patch({ mcu_pdf: v })}
-                    hint="Upload hasil MCU (PDF / JPG)"
-                  />
+                <p className="text-sm text-gray-500 mb-4">Semua berkas wajib hasil pindai PDF.</p>
+                <div className="grid gap-4 md:grid-cols-3">
+                  {SUPPORTING_DOCS.map((doc) => (
+                    <DocUploadField
+                      key={doc.studentKey}
+                      label={doc.label}
+                      hint={doc.hint}
+                      studentName={draft.nama_lengkap}
+                      value={String(draft[doc.studentKey] ?? "")}
+                      onChange={(v) => patch({ [doc.studentKey]: v })}
+                    />
+                  ))}
                 </div>
               </SectionPanel>
             </div>
           )}
 
           {tab === "program" && (
-            <SectionPanel title="Program Magang & Jadwal Pelatihan">
-              <p className="text-sm text-gray-600 mb-4">
-                Ketik program magang yang diikuti siswa. Data penempatan perusahaan di Jepang diisi oleh FTI.
+            <SectionPanel title="Program & Jadwal">
+              {placementEditable && (
+                <div className="mb-6 grid gap-4 md:grid-cols-2">
+                  <FormSelect
+                    label="Angkatan"
+                    value={draft.angkatan}
+                    onChange={(v) => patch({ angkatan: v })}
+                    options={selectOptions(FTI_ANGKATAN_OPTIONS, draft.angkatan)}
+                    placeholder="Pilih angkatan"
+                  />
+                  <FormSelect
+                    label="Kelas"
+                    value={draft.kelas}
+                    onChange={(v) => patch({ kelas: v })}
+                    options={selectOptions(FTI_KELAS_OPTIONS, draft.kelas)}
+                    placeholder="Pilih kelas"
+                  />
+                  <FormSelect
+                    label="Hasil"
+                    value={draft.hasil_job}
+                    onChange={(v) => patch({ hasil_job: v })}
+                    options={[
+                      { value: "lulus", label: "Lolos" },
+                      { value: "tidak", label: "Tidak lolos" },
+                    ]}
+                    placeholder="Belum"
+                  />
+                  <FormField
+                    label="Lembaga"
+                    value={draft.program ? lembagaLabel(draft.program) : ""}
+                    onChange={() => undefined}
+                    readOnly
+                    autoUppercase={false}
+                    placeholder="Mengikuti program"
+                    hint="Ikusei Shuro menjadi Kumiai. Tokutei Ginou menjadi TSK."
+                  />
+                  <div className="md:col-span-2">
+                    <p className="text-sm font-medium text-slate-700">Riwayat matching</p>
+                    <MatchingNotes studentId={draft.id} />
+                  </div>
+                </div>
+              )}
+              <LpkProgramFields
+                program={draft.program}
+                onProgram={(v) => patch({ program: v })}
+                job={draft.jenis_pekerjaan}
+                onJob={(v) => patch({ jenis_pekerjaan: v })}
+                asalLpk={draft.asal_lpk || "LPK Mitra Sukabumi"}
+                schedule={{
+                  tanggal_masuk_pelatihan: draft.tanggal_masuk_pelatihan,
+                  tanggal_kelulusan: draft.tanggal_kelulusan,
+                  perkiraan_masuk_jepang: draft.perkiraan_masuk_jepang,
+                  tanggal_keberangkatan: draft.tanggal_keberangkatan,
+                }}
+                onSchedule={(next) => patch(next)}
+                scheduleEditable={scheduleEditable}
+              />
+            </SectionPanel>
+          )}
+
+          {tab === "pindahkan" && (
+            <SectionPanel title="Pindahkan ke Alumni">
+              <p className="text-sm leading-relaxed text-gray-600">
+                Siswa pindah dari daftar Data Siswa FTI ke Data Alumni. Nama, kontak, keluarga, sertifikat, dokumen, program, dan jadwal yang sudah ada tetap tersimpan. Tabel alumni menampilkan kolom tracking saja, dan setiap kolom itu bisa diubah lewat tombol Edit.
               </p>
-              <div className="grid md:grid-cols-2 gap-4">
-                <FormField
-                  label="Program Magang LPK"
-                  value={draft.jenis_pekerjaan}
-                  onChange={(v) => patch({ jenis_pekerjaan: v })}
-                  placeholder="Contoh: Magang PM, Magang Manufaktur"
-                />
-                <FormField label="Asal LPK" value={draft.asal_lpk} onChange={(v) => patch({ asal_lpk: v })} />
-                <FormField label="Tanggal Masuk Pelatihan" type="date" value={draft.tanggal_masuk_pelatihan} onChange={(v) => patch({ tanggal_masuk_pelatihan: v })} />
-                <FormField label="Tanggal Kelulusan" type="date" value={draft.tanggal_kelulusan} onChange={(v) => patch({ tanggal_kelulusan: v })} />
-                <FormField label="Perkiraan Masuk Jepang" type="date" value={draft.perkiraan_masuk_jepang} onChange={(v) => patch({ perkiraan_masuk_jepang: v })} />
-                <FormField label="Tanggal Keberangkatan" type="date" value={draft.tanggal_keberangkatan} onChange={(v) => patch({ tanggal_keberangkatan: v })} />
-              </div>
+              <button
+                type="button"
+                onClick={assignAlumni}
+                disabled={draft.assigned_alumni === true}
+                className="mt-4 inline-flex items-center border border-[#fc809f] bg-[#fc809f] px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-white hover:bg-[#e56f8d] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Assign to Alumni
+              </button>
+              {draft.assigned_alumni ? (
+                <p className="mt-3 text-sm text-gray-500">Siswa ini sudah ada di Data Alumni.</p>
+              ) : null}
             </SectionPanel>
           )}
         </div>

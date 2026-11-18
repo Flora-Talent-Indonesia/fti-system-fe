@@ -27,6 +27,8 @@ export type Job = {
   title: string;
   titleJa?: string;
   company: string;
+  /** Kumiai untuk Magang, TSK untuk Tokutei Ginou. */
+  pengirim?: string;
   description: string;
   deadlineDokumen: string;
   tanggalMansetsu: string;
@@ -34,4 +36,10 @@ export type Job = {
   createdAt: string;
   assignedStudentIds: string[];
   interestedStudentIds: string[];
+  /** Nama file PDF kyujin. Kosong berarti belum diunggah. */
+  kyujinPdf?: string;
+  /** LPK yang boleh melihat lowongan. Tidak diisi = data lama, tampil di semua LPK. Array kosong = tidak tampil. */
+  visibleLpkIds?: string[];
+  /** Hasil mensetsu per id siswa: lulus atau tidak. */
+  mensetsuResults?: Record<string, "lulus" | "tidak">;
 };

@@ -89,6 +89,7 @@ export default function StepFisik({ data, onChange, errors = {} }: Props) {
           <FormSelect id="field-tato" label="タトゥ / Tato" value={data.tato} onChange={(v) => set('tato', v)} options={ADA_TIDAK} error={errors['tato']} />
           <FormSelect id="field-riwayat_patah_tulang" label="骨折歴 / Riwayat Patah Tulang" value={data.riwayat_patah_tulang} onChange={(v) => set('riwayat_patah_tulang', v)} options={ADA_TIDAK} error={errors['riwayat_patah_tulang']} />
           <FormSelect id="field-merokok" label="タバコ / Merokok" value={data.merokok} onChange={(v) => set('merokok', v)} options={YA_TIDAK} error={errors['merokok']} />
+          <FormSelect id="field-minum_alkohol" label="飲酒 / Minum Alkohol" value={data.minum_alkohol ?? ''} onChange={(v) => set('minum_alkohol', v)} options={YA_TIDAK} />
           {data.merokok === 'Ya' && (
             <FormField id="field-jumlah_rokok" label="1日の本数 / Jumlah Rokok per Hari" value={data.jumlah_rokok} onChange={(v) => set('jumlah_rokok', v.replace(/\D/g, ''))} type="text" inputMode="numeric" placeholder="Contoh: 2" autoUppercase={false} error={errors['jumlah_rokok']} />
           )}

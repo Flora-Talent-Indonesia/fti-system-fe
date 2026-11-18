@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import PortalPageShell from "@/components/PortalPageShell";
+import SearchField from "@/components/SearchField";
 import type { Job } from "@/types";
 import {
   deleteJob,
@@ -21,6 +22,8 @@ import {
   seedJobsIfEmpty,
   upsertJob,
 } from "@/lib/job-storage";
+import { applyMensetsuToStudent } from "@/lib/placement";
+import { getLpkStudentById, upsertLpkStudent } from "@/lib/lpk-student-storage";
 import {
   calculateJobStatus,
   formatJobDate,
@@ -30,6 +33,7 @@ import {
   type JobSortDir,
   type JobSortField,
 } from "@/lib/job-utils";
+import { omitInactiveAccounts } from "@/lib/fti-student-account-storage";
 import { seedLpkStudentsIfEmpty } from "@/lib/lpk-student-storage";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 import JobFormModal, { type JobFormData } from "./components/JobFormModal";
@@ -68,10 +72,19 @@ function SortableTh({
   );
 }
 
+function needsMensetsuReview(job: Job): boolean {
+  if (!job.tanggalMansetsu) return false;
+  const when = new Date(`${job.tanggalMansetsu}T23:59:59`);
+  if (Number.isNaN(when.getTime()) || when.getTime() >= Date.now()) return false;
+  return job.assignedStudentIds.some((id) => !job.mensetsuResults?.[id]);
+}
+
 export default function FtiJobAssignmentPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [candidates, setCandidates] = useState<LpkStudentRecord[]>([]);
+  const [visibleStudentIds, setVisibleStudentIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"aktif" | "nonaktif">("aktif");
+  const [query, setQuery] = useState("");
   const [sortField, setSortField] = useState<JobSortField>("tanggalMansetsu");
   const [sortDir, setSortDir] = useState<JobSortDir>("asc");
 
@@ -81,11 +94,13 @@ export default function FtiJobAssignmentPage() {
   const [assignJobId, setAssignJobId] = useState<string | null>(null);
   const [viewJobId, setViewJobId] = useState<string | null>(null);
   const [descModal, setDescModal] = useState<{ title: string; description: string } | null>(null);
+  const [reviewJob, setReviewJob] = useState<Job | null>(null);
 
   useEffect(() => {
     setJobs(seedJobsIfEmpty());
-    const all = seedLpkStudentsIfEmpty();
-    setCandidates(all.filter((s) => s.status === "rekrut"));
+    const visible = omitInactiveAccounts(seedLpkStudentsIfEmpty());
+    setVisibleStudentIds(new Set(visible.map((student) => student.id)));
+    setCandidates(visible.filter((s) => s.status === "rekrut"));
   }, []);
 
   const handleSort = (field: JobSortField) => {
@@ -98,9 +113,16 @@ export default function FtiJobAssignmentPage() {
   };
 
   const displayedJobs = useMemo(() => {
-    const pool = jobs.filter((j) => (activeTab === "aktif" ? isJobActive(j) : !isJobActive(j)));
+    const q = query.trim().toLowerCase();
+    const pool = jobs.filter((job) => {
+      if (activeTab === "aktif" ? !isJobActive(job) : isJobActive(job)) return false;
+      if (!q) return true;
+      return [job.title, job.company, job.pengirim, job.description].some((value) =>
+        (value || "").toLowerCase().includes(q),
+      );
+    });
     return sortJobs(pool, sortField, sortDir);
-  }, [jobs, activeTab, sortField, sortDir]);
+  }, [jobs, activeTab, query, sortField, sortDir]);
 
   const assignJob = jobs.find((j) => j.id === assignJobId);
   const viewJob = jobs.find((j) => j.id === viewJobId);
@@ -114,10 +136,14 @@ export default function FtiJobAssignmentPage() {
       id: nextJobId(),
       title: data.title,
       company: data.company || "-",
+      pengirim: data.pengirim,
       description: data.description,
       deadlineDokumen: data.deadlineDokumen,
       tanggalMansetsu: data.tanggalMansetsu,
       kuota: data.kuota,
+      kyujinPdf: data.kyujinPdf,
+      visibleLpkIds: data.visibleLpkIds,
+      mensetsuResults: {},
       createdAt: new Date().toISOString(),
       assignedStudentIds: [],
       interestedStudentIds: [],
@@ -164,10 +190,12 @@ export default function FtiJobAssignmentPage() {
     toast.success("Siswa di-unassign.");
   };
 
+  const searching = query.trim().length > 0;
+
   return (
-    <PortalPageShell>
-      <main className="p-4 md:p-8">
-        <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <PortalPageShell fill>
+      <main className="flex h-full min-h-0 flex-col overflow-hidden px-4 pb-3 pt-4 md:px-6 md:pb-4 md:pt-5">
+        <header className="mb-4 flex shrink-0 flex-col justify-between gap-4 md:flex-row md:items-center">
           <div className="flex items-center gap-4">
             <Link
               href="/fti"
@@ -192,8 +220,8 @@ export default function FtiJobAssignmentPage() {
           </button>
         </header>
 
-        <div className="bg-white border border-gray-200/60 rounded-xl shadow-sm overflow-hidden">
-          <div className="px-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50/50 gap-4 pt-2">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200/60 bg-white shadow-sm">
+          <div className="flex shrink-0 flex-col justify-between gap-3 border-b border-gray-100 bg-gray-50/50 px-6 pt-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-6">
               <button
                 type="button"
@@ -220,35 +248,53 @@ export default function FtiJobAssignmentPage() {
                 Job Nonaktif
               </button>
             </div>
-            <p className="text-sm text-gray-500 pb-4 sm:pb-0">
-              Total {displayedJobs.length} Job {activeTab === "aktif" ? "Aktif" : "Nonaktif"}
-            </p>
+            <div className="flex items-center gap-3 pb-3 sm:pb-0">
+              <SearchField
+                value={query}
+                onChange={setQuery}
+                placeholder="Cari job"
+                variant="box"
+                className="w-56 sm:w-72"
+              />
+              <p className="text-sm text-gray-500">
+                Total {displayedJobs.length} Job {activeTab === "aktif" ? "Aktif" : "Nonaktif"}
+              </p>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="min-h-0 flex-1 overflow-auto">
             {displayedJobs.length === 0 ? (
-              <div className="py-20 text-center flex flex-col items-center">
-                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 mb-4 border border-gray-100">
+              <div className="flex flex-col items-center py-20 text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-gray-100 bg-gray-50 text-gray-400">
                   <Briefcase size={32} strokeWidth={1.5} />
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-1">
-                  {activeTab === "aktif" ? "Belum ada Job Aktif" : "Belum ada Job Nonaktif"}
+                <h3 className="mb-1 text-lg font-medium text-gray-900">
+                  {searching
+                    ? "Job tidak ditemukan"
+                    : activeTab === "aktif"
+                      ? "Belum ada Job Aktif"
+                      : "Belum ada Job Nonaktif"}
                 </h3>
-                <p className="text-sm text-gray-500 max-w-sm px-4">
-                  {activeTab === "aktif"
-                    ? 'Klik "Tambah Job Baru" untuk membuat job dan assign siswa.'
-                    : "Job pindah ke sini setelah melewati tanggal mansetsu."}
+                <p className="max-w-sm px-4 text-sm text-gray-500">
+                  {searching
+                    ? `Tidak ada job yang cocok dengan “${query.trim()}”.`
+                    : activeTab === "aktif"
+                      ? 'Klik "Tambah Job Baru" untuk membuat job dan assign siswa.'
+                      : "Job pindah ke sini setelah melewati tanggal mansetsu."}
                 </p>
               </div>
             ) : (
-              <table className="w-full text-sm text-left whitespace-nowrap">
-                <thead className="text-xs text-gray-600 uppercase bg-gray-100/80 border-b border-gray-200/80">
+              <table className="w-full whitespace-nowrap text-left text-sm">
+                <thead className="sticky top-0 z-10 border-b border-gray-200/80 bg-gray-100 text-xs uppercase text-gray-600">
                   <tr>
                     <th scope="col" className="px-6 py-4 font-semibold w-12">
                       No
                     </th>
                     <th scope="col" className="px-6 py-4 font-semibold">
                       Job Title
+                    </th>
+                    <th scope="col" className="px-6 py-4 font-semibold">
+                      Nama Pengirim
                     </th>
                     <th scope="col" className="px-6 py-4 font-semibold">
                       Status
@@ -287,7 +333,7 @@ export default function FtiJobAssignmentPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {displayedJobs.map((job, index) => {
-                    const assigned = job.assignedStudentIds.length;
+                    const assigned = job.assignedStudentIds.filter((id) => visibleStudentIds.has(id)).length;
                     const full = job.kuota != null && assigned >= job.kuota;
                     const status = calculateJobStatus(job.deadlineDokumen, job.tanggalMansetsu);
                     const inactiveTab = activeTab === "nonaktif";
@@ -309,6 +355,7 @@ export default function FtiJobAssignmentPage() {
                             </button>
                           )}
                         </td>
+                        <td className="px-6 py-4 text-gray-700">{job.pengirim?.trim() || "—"}</td>
                         <td className="px-6 py-4">
                           <span
                             className={`px-2.5 py-1 text-xs rounded-full font-medium ${statusBadgeClass(
@@ -325,6 +372,9 @@ export default function FtiJobAssignmentPage() {
                         </td>
                         <td className="px-6 py-4 text-gray-500">
                           {formatJobDate(job.tanggalMansetsu)}
+                          {needsMensetsuReview(job) && (
+                            <span className="ml-2 text-amber-600" title="Tanggal mensetsu lewat. Tentukan lulus atau tidak.">▲</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-center font-medium text-gray-700">
                           {job.kuota ?? "-"}
@@ -361,6 +411,13 @@ export default function FtiJobAssignmentPage() {
                             </button>
                             <button
                               type="button"
+                              onClick={() => setReviewJob(job)}
+                              className="px-3 py-1.5 text-xs font-medium rounded-lg text-amber-800 bg-amber-50 border border-amber-200"
+                            >
+                              Hasil
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => setEditJob(job)}
                               className="px-3 py-1.5 text-xs font-medium rounded-lg text-amber-700 bg-amber-50 border border-amber-200/60 hover:bg-amber-100"
                             >
@@ -384,8 +441,54 @@ export default function FtiJobAssignmentPage() {
           </div>
         </div>
 
-        <p className="mt-4 text-xs text-gray-500 text-center">
-          Mode testing — data job disimpan di localStorage. Klik header kolom tanggal untuk sort.
+        {reviewJob && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+            <div className="bg-white w-full max-w-lg p-6">
+              <h2 className="font-serif text-xl mb-1">Hasil mensetsu</h2>
+              <p className="text-sm text-gray-500 mb-4">{reviewJob.title}. Yang lulus masuk antrean dokumen.</p>
+              <div className="space-y-2">
+                {reviewJob.assignedStudentIds.filter((id) => visibleStudentIds.has(id)).length === 0 && <p className="text-sm text-gray-500">Belum ada siswa di-assign.</p>}
+                {reviewJob.assignedStudentIds.filter((id) => visibleStudentIds.has(id)).map((id) => {
+                  const student = candidates.find((item) => item.id === id);
+                  return (
+                    <label key={id} className="flex items-center justify-between gap-3 text-sm">
+                      <span>{student?.nama_lengkap || id}</span>
+                      <select
+                        className="border border-gray-300 px-2 py-1"
+                        value={reviewJob.mensetsuResults?.[id] ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value as "lulus" | "tidak" | "";
+                          const next = {
+                            ...reviewJob,
+                            mensetsuResults: { ...reviewJob.mensetsuResults, ...(value ? { [id]: value } : {}) },
+                          };
+                          if (!value) delete next.mensetsuResults?.[id];
+                          setReviewJob(next);
+                          setJobs(upsertJob(next));
+                          const stored = getLpkStudentById(id);
+                          if (!stored) return;
+                          const updated = applyMensetsuToStudent(stored, next, value);
+                          upsertLpkStudent(updated);
+                          setCandidates((list) => list.map((item) => (item.id === id ? updated : item)));
+                        }}
+                      >
+                        <option value="">Belum</option>
+                        <option value="lulus">Lolos</option>
+                        <option value="tidak">Tidak lolos</option>
+                      </select>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button type="button" className="btn-primary" onClick={() => setReviewJob(null)}>Tutup</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <p className="mt-2 shrink-0 text-center text-xs text-gray-500">
+          Klik header kolom tanggal untuk mengurutkan.
         </p>
       </main>
 

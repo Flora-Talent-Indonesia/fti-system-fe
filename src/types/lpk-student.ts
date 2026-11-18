@@ -13,6 +13,7 @@ export type LpkSertifikatItem = {
   score?: string | null;
   bulan_diperoleh?: string | null;
   tahun_diperoleh?: string | null;
+  tanggal_diperoleh?: string | null;
   sertifikat?: string | null;
 };
 
@@ -22,18 +23,24 @@ export type LpkPendidikanItem = {
   jurusan?: string | null;
   bulan_masuk?: string | null;
   tahun_masuk?: string | null;
+  tanggal_masuk?: string | null;
   bulan_lulus?: string | null;
   tahun_lulus?: string | null;
+  tanggal_lulus?: string | null;
 };
 
 export type LpkPekerjaanItem = {
   nama_perusahaan?: string | null;
   posisi_pekerjaan?: string | null;
   status_pekerjaan?: string | null;
+  jenis_pekerjaan?: string | null;
+  deskripsi_pekerjaan?: string | null;
   bulan_mulai?: string | null;
   tahun_mulai?: string | null;
+  tanggal_mulai?: string | null;
   bulan_selesai?: string | null;
   tahun_selesai?: string | null;
+  tanggal_selesai?: string | null;
 };
 
 export type TimelineEventStatus = "done" | "current" | "upcoming" | "failed";
@@ -73,6 +80,7 @@ export type LpkStudentRecord = {
   nama_katakana: string;
   nama_panggilan: string;
   angkatan: string;
+  kelas: string;
   kewarganegaraan: string;
   tanggal_lahir: string;
   umur: string;
@@ -98,11 +106,31 @@ export type LpkStudentRecord = {
   merokok: string;
   frequensi_merokok: string;
   buta_warna: string;
+  kontak_darurat_nama: string;
+  kontak_darurat_hubungan: string;
+  kontak_darurat_telepon: string;
+  /** ikusei | tg | reguler */
+  program: string;
+  hasil_job: string;
+  n3: string;
+  sim_jepang: string;
   patah_tulang: string;
   hobi: string;
+  /** Field FORMAT CV yang tidak ada di kolom operasional lama. */
+  tempat_lahir?: string;
+  tangan_dominan?: string;
+  minum_alkohol?: string;
+  periode_luar_negeri?: string;
+  tujuan_luar_negeri?: string;
+  sisa_hari_tokutei?: string;
+  sisa_tahun?: string;
+  sisa_bulan?: string;
+  tujuan_ke_jepang?: string;
+  komentar_pewawancara?: string;
+  keterangan_medis_status?: string;
+  keterangan_medis?: string;
   tingkatan_pembelajaran: string;
   asal_lpk: string;
-  nama_so: string;
   nama_kumiai: string;
   nama_perusahaan: string;
   jenis_pekerjaan: string;
@@ -111,9 +139,13 @@ export type LpkStudentRecord = {
   perkiraan_masuk_jepang: string;
   tanggal_keberangkatan: string;
   dokumen_ktp: string;
+  dokumen_ktp_ortu: string;
   dokumen_kk: string;
   dokumen_akte: string;
+  dokumen_paspor_file: string;
   dokumen_ijazah: string;
+  dokumen_skck: string;
+  dokumen_perjanjian: string;
   sertifikat_dimiliki: string[];
   keluarga: LpkKeluargaItem[];
   sertifikat: LpkSertifikatItem[];
@@ -134,6 +166,10 @@ export type LpkStudentRecord = {
   dokumen_visa?: string;
   dokumen_coe?: string;
   dokumen_ektkln?: string;
+  /** Dipindahkan dari Data Siswa FTI tanpa mengubah data yang sudah ada. */
+  assigned_alumni?: boolean;
+  /** Tahun pulang yang diisi manual. Kosong berarti dihitung dari program dan tanggal masuk. */
+  estimasi_pulang?: string;
 };
 
 export function createEmptyLpkStudent(partial?: Partial<LpkStudentRecord>): LpkStudentRecord {
@@ -147,6 +183,7 @@ export function createEmptyLpkStudent(partial?: Partial<LpkStudentRecord>): LpkS
     nama_katakana: "",
     nama_panggilan: "",
     angkatan: String(new Date().getFullYear()),
+    kelas: "",
     kewarganegaraan: "インドネシア",
     tanggal_lahir: "",
     umur: "",
@@ -172,11 +209,29 @@ export function createEmptyLpkStudent(partial?: Partial<LpkStudentRecord>): LpkS
     merokok: "",
     frequensi_merokok: "",
     buta_warna: "",
+    kontak_darurat_nama: "",
+    kontak_darurat_hubungan: "",
+    kontak_darurat_telepon: "",
+    program: "",
+    hasil_job: "",
+    n3: "",
+    sim_jepang: "",
     patah_tulang: "",
     hobi: "",
+    tempat_lahir: "",
+    tangan_dominan: "",
+    minum_alkohol: "",
+    periode_luar_negeri: "",
+    tujuan_luar_negeri: "",
+    sisa_hari_tokutei: "",
+    sisa_tahun: "",
+    sisa_bulan: "",
+    tujuan_ke_jepang: "",
+    komentar_pewawancara: "",
+    keterangan_medis_status: "",
+    keterangan_medis: "",
     tingkatan_pembelajaran: "",
     asal_lpk: "LPK Mitra Sukabumi",
-    nama_so: "",
     nama_kumiai: "",
     nama_perusahaan: "",
     jenis_pekerjaan: "",
@@ -185,9 +240,13 @@ export function createEmptyLpkStudent(partial?: Partial<LpkStudentRecord>): LpkS
     perkiraan_masuk_jepang: "",
     tanggal_keberangkatan: "",
     dokumen_ktp: "",
+    dokumen_ktp_ortu: "",
     dokumen_kk: "",
     dokumen_akte: "",
+    dokumen_paspor_file: "",
     dokumen_ijazah: "",
+    dokumen_skck: "",
+    dokumen_perjanjian: "",
     sertifikat_dimiliki: [],
     keluarga: [],
     sertifikat: [],
@@ -204,6 +263,8 @@ export function createEmptyLpkStudent(partial?: Partial<LpkStudentRecord>): LpkS
     dokumen_visa: "",
     dokumen_coe: "",
     dokumen_ektkln: "",
+    assigned_alumni: false,
+    estimasi_pulang: "",
     ...partial,
   };
 }

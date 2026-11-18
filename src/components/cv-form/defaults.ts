@@ -1,4 +1,16 @@
-import type { CVData } from './types';
+import type { CVData, CatatanCv } from './types';
+
+export const emptyCatatan = (): CatatanCv => ({
+  periode_luar_negeri: '',
+  tujuan_luar_negeri: '',
+  sisa_hari_tokutei: '',
+  sisa_tahun: '',
+  sisa_bulan: '',
+  tujuan_ke_jepang: '',
+  komentar_pewawancara: '',
+  keterangan_medis_status: '',
+  keterangan_medis: '',
+});
 
 export const defaultCVData: CVData = {
   meta: {
@@ -7,9 +19,14 @@ export const defaultCVData: CVData = {
   },
   dokumen: {
     ktp: '',
+    ktp_ortu: '',
     kk: '',
     akte_kelahiran: '',
+    paspor: '',
     ijazah_terakhir: '',
+    skck: '',
+    mcu: '',
+    surat_perjanjian: '',
   },
 
   informasi_dasar: {
@@ -29,6 +46,11 @@ export const defaultCVData: CVData = {
     kode_pos: '',
     nomor_telepon: '',
     email: '',
+    kontak_darurat_nama: '',
+    kontak_darurat_hubungan: '',
+    kontak_darurat_telepon: '',
+    tempat_lahir: '',
+    tangan_dominan: '',
   },
   fisik_kesehatan: {
     tinggi_badan: '',
@@ -44,11 +66,14 @@ export const defaultCVData: CVData = {
     buta_warna: '',
     riwayat_patah_tulang: '',
     hobi: '',
+    minum_alkohol: '',
   },
   pendidikan: [],
   pekerjaan: [],
   sertifikat: [],
   keluarga: [],
+  catatan: emptyCatatan(),
+  program: '',
 };
 
 export const BULAN_OPTIONS = [

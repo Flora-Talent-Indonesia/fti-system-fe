@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Eye, Info, Pencil } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Eye, Info, Pencil, Trash2 } from "lucide-react";
 import StickyHorizontalScroll from "@/components/StickyHorizontalScroll";
+import TablePagination from "@/components/TablePagination";
+import { useFitViewportScroll } from "@/hooks/useFitViewportScroll";
+import { STUDENT_TABLE_PAGE, useTablePagination } from "@/hooks/useTablePagination";
 import DownloadFileButton from "@/components/lpk/DownloadFileButton";
 import { useFtiAdmin } from "@/hooks/use-fti-admin";
 import LpkCvPreviewModal from "./LpkCvPreviewModal";
@@ -16,12 +20,95 @@ import {
 import { SiswaTh, SiswaTd, SiswaActionTh, SiswaActionTd, cell, fmtGender, fmtMata } from "./table-helpers";
 import StudentDetailsModal from "@/components/fti/StudentDetailsModal";
 import type { LpkStudentRecord } from "@/types/lpk-student";
+import { hasilLabel, namaPengirim, programLabel } from "@/lib/placement";
+import { docShortLabel, missingRequiredDocs } from "@/lib/supporting-docs";
 
-const STICKY_TRACK_INSET = "calc((60px + 140px + 80px + 200px) * 0.9)";
-const EDIT_BTN =
-  "inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#fc809f] hover:text-white bg-[#fc809f]/10 hover:bg-[#fc809f] rounded-lg transition-colors border border-[#fc809f]/20";
+const ACTION_ICON =
+  "inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-300 bg-rose-50 text-rose-500 transition-colors hover:bg-rose-100";
+
+function SelectAllBox({
+  checked,
+  indeterminate,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      aria-label="Pilih semua siswa"
+      className="h-4 w-4 accent-[#fc809f]"
+    />
+  );
+}
 const LINK_BTN =
-  "px-3 py-1.5 text-xs font-medium text-[#fc809f] bg-[#fc809f]/10 border border-[#fc809f]/20 hover:bg-[#fc809f]/20 rounded-lg transition-colors";
+  "px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors border border-blue-200 rounded-sm";
+
+function MissingDocsMark({ names }: { names: string[] }) {
+  const markRef = useRef<HTMLSpanElement>(null);
+  const [tip, setTip] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (!tip) return;
+    const hide = () => setTip(null);
+    window.addEventListener("scroll", hide, true);
+    window.addEventListener("resize", hide);
+    return () => {
+      window.removeEventListener("scroll", hide, true);
+      window.removeEventListener("resize", hide);
+    };
+  }, [tip]);
+
+  const show = () => {
+    const box = markRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const width = 240;
+    const left = box.right + 8 + width > window.innerWidth ? box.left - width - 8 : box.right + 8;
+    setTip({ top: box.top + box.height / 2, left: Math.max(8, left) });
+  };
+
+  return (
+    <>
+      <span
+        ref={markRef}
+        className="ml-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold leading-none text-amber-700"
+        aria-label={`Belum upload: ${names.join(", ")}`}
+        onMouseEnter={show}
+        onMouseLeave={() => setTip(null)}
+        onFocus={show}
+        onBlur={() => setTip(null)}
+        tabIndex={0}
+      >
+        !
+      </span>
+      {tip &&
+        createPortal(
+          <div
+            role="tooltip"
+            className="pointer-events-none fixed z-[80] w-max max-w-[240px] border border-amber-200 bg-white px-3 py-2 text-left shadow-lg"
+            style={{ top: tip.top, left: tip.left, transform: "translateY(-50%)" }}
+          >
+            <p className="text-[11px] font-semibold text-amber-800">Belum upload</p>
+            <ul className="m-0 mt-1 list-none space-y-0.5 p-0 text-[11px] font-medium leading-snug text-gray-700">
+              {names.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
 
 type Props = {
   students: LpkStudentRecord[];
@@ -31,6 +118,13 @@ type Props = {
   emptyAction?: React.ReactNode;
   /** Paksa aktif/nonaktif unduh; default mengikuti sesi Admin FTI */
   allowDownload?: boolean;
+  /** Hanya admin FTI. Portal LPK tidak menerima prop ini. */
+  allowDelete?: boolean;
+  onDelete?: (student: LpkStudentRecord) => void;
+  selecting?: boolean;
+  selectedIds?: Set<string>;
+  onToggleStudent?: (id: string) => void;
+  onToggleAll?: (checked: boolean) => void;
   showJalurPendaftaran?: boolean;
   showStatusSiswa?: boolean;
 };
@@ -42,6 +136,12 @@ export default function LpkSiswaTable({
   emptyMessage = "Belum ada siswa.",
   emptyAction,
   allowDownload: allowDownloadProp,
+  allowDelete = false,
+  onDelete,
+  selecting = false,
+  selectedIds,
+  onToggleStudent,
+  onToggleAll,
   showJalurPendaftaran = false,
   showStatusSiswa = false,
 }: Props) {
@@ -53,8 +153,30 @@ export default function LpkSiswaTable({
   const [personalStudent, setPersonalStudent] = useState<LpkStudentRecord | null>(null);
   const [cvPreviewStudent, setCvPreviewStudent] = useState<LpkStudentRecord | null>(null);
   const [detailStudent, setDetailStudent] = useState<LpkStudentRecord | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<LpkStudentRecord | null>(null);
+  const canDelete = allowDelete && Boolean(onDelete);
+  const showRowActions = (!readOnly && !showStatusSiswa) || canDelete;
 
   const rows = useMemo(() => students, [students]);
+  const chosen = selectedIds ?? new Set<string>();
+  const selectedOnPage = rows.filter((student) => chosen.has(student.id)).length;
+  const allSelected = rows.length > 0 && selectedOnPage === rows.length;
+  const {
+    paginatedItems,
+    currentPage,
+    pageSize,
+    totalItems,
+    totalPages,
+    rangeStart,
+    rangeEnd,
+    minPageSize,
+    presetPageSizes,
+    isCustomPageSize,
+    setCurrentPage,
+    setPageSize,
+    setIsCustomPageSize,
+  } = useTablePagination(rows, STUDENT_TABLE_PAGE);
+  const tableFit = useFitViewportScroll(rows.length > 0);
 
   const handleSave = (updated: LpkStudentRecord) => {
     onSave?.(updated);
@@ -72,22 +194,23 @@ export default function LpkSiswaTable({
 
   return (
     <>
-      <div className="bg-white border border-gray-300 relative z-10 shadow-sm">
-        <StickyHorizontalScroll trackInsetLeft={STICKY_TRACK_INSET}>
-          <table
-            className="admin-data-table w-full text-sm text-left whitespace-nowrap"
-            style={{ zoom: "90%" }}
-          >
-            <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 shadow-sm">
+      <div className="profil-siswa-jukyu relative z-10 border border-gray-300 bg-white shadow-sm" style={{ zoom: "90%" }}>
+        <StickyHorizontalScroll ref={tableFit.scrollerRef} maxHeight={tableFit.maxHeight}>
+          <table className="admin-data-table w-full text-left text-sm whitespace-nowrap">
+            <thead className="sticky top-0 z-30 bg-gray-100 text-xs uppercase text-gray-700">
               <tr>
-                <SiswaTh jp="NO" id="" sticky="sticky left-0 z-20 min-w-[60px] bg-gray-100" />
-                <SiswaTh jp="プログラム" id="Program" sticky="sticky left-[60px] z-20 min-w-[140px] bg-gray-100" />
-                <SiswaTh jp="写真" id="Foto" sticky="sticky left-[200px] z-20 min-w-[80px] bg-gray-100" />
+                <SiswaTh jp="NO" id="" sticky="sticky left-0 z-20 min-w-[60px] border-r bg-gray-100" />
+                <SiswaTh jp="実習生番号" id="ID Peserta" sticky="sticky left-[60px] z-20 min-w-[140px] border-r bg-gray-100" />
+                <SiswaTh jp="プログラム" id="Program" sticky="sticky left-[200px] z-20 min-w-[140px] border-r bg-gray-100" />
+                <SiswaTh jp="写真" id="Foto" sticky="sticky left-[340px] z-20 min-w-[80px] border-r bg-gray-100" />
                 <SiswaTh
                   jp="実習生本名"
                   id="Nama Peserta"
-                  sticky="sticky left-[280px] z-20 min-w-[200px] bg-gray-100 admin-sticky-split-right"
+                  sticky="sticky left-[420px] z-20 min-w-[200px] border-r bg-gray-100 admin-sticky-split-right"
                 />
+                <SiswaTh jp="送出元" id="Nama Pengirim" className="min-w-[160px]" />
+                <SiswaTh jp="企業名" id="Nama Perusahaan" className="min-w-[160px]" />
+                <SiswaTh jp="結果" id="Hasil" className="min-w-[120px]" />
                 {showJalurPendaftaran && (
                   <SiswaTh jp="登録ルート" id="Jalur Pendaftaran" className="min-w-[150px]" />
                 )}
@@ -95,7 +218,6 @@ export default function LpkSiswaTable({
                   <SiswaTh jp="学生のステータス" id="Status Siswa" className="min-w-[180px]" />
                 )}
                 <SiswaTh jp="履歴書" id="Preview CV" cv className="text-center min-w-[100px]" />
-                <SiswaTh jp="カタカナ" id="Katakana" cv />
                 <SiswaTh jp="親のデータ" id="Data Orang Tua" cv />
                 <SiswaTh jp="呼称" id="Nama Panggilan" cv />
                 <SiswaTh jp="国籍" id="Kewarganegaraan" cv />
@@ -128,20 +250,37 @@ export default function LpkSiswaTable({
                 <SiswaTh jp="出国日" id="Tanggal Keberangkatan" />
                 <SiswaTh jp="個人データファイル" id="File Data Diri" cv />
                 {showStatusSiswa && <SiswaActionTh jp="アクション" label="Action" />}
-                {!readOnly && !showStatusSiswa && <SiswaActionTh label="Aksi" />}
+                {showRowActions && (
+                  <SiswaActionTh
+                    label="Aksi"
+                    leading={
+                      selecting ? (
+                        <SelectAllBox
+                          checked={allSelected}
+                          indeterminate={selectedOnPage > 0 && !allSelected}
+                          onChange={(checked) => onToggleAll?.(checked)}
+                        />
+                      ) : undefined
+                    }
+                  />
+                )}
               </tr>
             </thead>
             <tbody>
-              {rows.map((s, index) => (
-                <tr key={s.id} className="bg-white hover:bg-gray-50 transition-colors group">
+              {paginatedItems.map((s, index) => (
+                <tr key={s.id} className="bg-white transition-colors hover:bg-slate-50 group">
                   <SiswaTd sticky="sticky left-0" className="font-medium text-gray-900">
-                    {index + 1}
+                    {rangeStart + index}
                   </SiswaTd>
-                  <SiswaTd sticky="sticky left-[60px]" className="text-xs">
+                  <SiswaTd sticky="sticky left-[60px]" className="font-medium text-gray-800">
+                    {cell(s.no_peserta)}
+                  </SiswaTd>
+                  <SiswaTd sticky="sticky left-[200px]" className="text-xs">
+                    <div>{programLabel(s.program) || "—"}</div>
                     <span className="font-medium text-[#fc809f]">{cell(s.jenis_pekerjaan)}</span>
                   </SiswaTd>
-                  <SiswaTd sticky="sticky left-[200px]">
-                    <div className="w-9 aspect-[3/4] bg-gray-100 overflow-hidden border border-gray-200 flex items-center justify-center mx-auto">
+                  <SiswaTd sticky="sticky left-[340px]">
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100 shadow-sm">
                       {s.foto ? (
                         <img src={s.foto} alt="" className="w-full h-full object-cover" />
                       ) : (
@@ -150,11 +289,22 @@ export default function LpkSiswaTable({
                     </div>
                   </SiswaTd>
                   <SiswaTd
-                    sticky="sticky left-[280px] admin-sticky-split-right"
+                    sticky="sticky left-[420px] admin-sticky-split-right"
                     className="font-medium text-gray-800"
                   >
-                    {s.nama_lengkap}
+                    <div className="text-[10px] leading-none text-gray-500">{cell(s.nama_katakana)}</div>
+                    <span className="mt-1 inline-flex items-center">
+                      {s.nama_lengkap}
+                      {(() => {
+                        const missing = missingRequiredDocs(s);
+                        if (!missing.length) return null;
+                        return <MissingDocsMark names={missing.map((doc) => docShortLabel(doc.label))} />;
+                      })()}
+                    </span>
                   </SiswaTd>
+                  <SiswaTd>{cell(namaPengirim(s))}</SiswaTd>
+                  <SiswaTd>{cell(s.nama_perusahaan)}</SiswaTd>
+                  <SiswaTd>{hasilLabel(s.hasil_job)}</SiswaTd>
                   {showJalurPendaftaran && (
                     <SiswaTd>
                       <span className="font-medium text-[#fc809f]">
@@ -200,7 +350,6 @@ export default function LpkSiswaTable({
                       Lihat
                     </button>
                   </SiswaTd>
-                  <SiswaTd cv>{cell(s.nama_katakana)}</SiswaTd>
                   <SiswaTd cv>
                     <button type="button" onClick={() => setParentStudent(s)} className={LINK_BTN}>
                       Lihat Data
@@ -264,12 +413,35 @@ export default function LpkSiswaTable({
                       </button>
                     </SiswaActionTd>
                   )}
-                  {!readOnly && !showStatusSiswa && (
+                  {showRowActions && (
                     <SiswaActionTd>
-                      <button type="button" onClick={() => setEditStudent(s)} className={EDIT_BTN} title="Edit Data">
-                        <Pencil size={14} />
-                        Edit
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        {selecting && (
+                          <input
+                            type="checkbox"
+                            checked={chosen.has(s.id)}
+                            onChange={() => onToggleStudent?.(s.id)}
+                            aria-label={`Pilih ${s.nama_lengkap}`}
+                            className="h-4 w-4 accent-[#fc809f]"
+                          />
+                        )}
+                        {!readOnly && !showStatusSiswa && (
+                          <button type="button" onClick={() => setEditStudent(s)} className={ACTION_ICON} title="Edit" aria-label="Edit">
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => setPendingDelete(s)}
+                            className={ACTION_ICON}
+                            title="Hapus"
+                            aria-label="Hapus"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
                     </SiswaActionTd>
                   )}
                 </tr>
@@ -277,6 +449,23 @@ export default function LpkSiswaTable({
             </tbody>
           </table>
         </StickyHorizontalScroll>
+        <div ref={tableFit.footerRef}>
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          pageSize={pageSize}
+          minPageSize={minPageSize}
+          presetPageSizes={presetPageSizes}
+          isCustomPageSize={isCustomPageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          onCustomModeChange={setIsCustomPageSize}
+          showPageNumbers={false}
+        />
+        </div>
       </div>
 
       {!readOnly && editStudent && onSave && (
@@ -284,6 +473,8 @@ export default function LpkSiswaTable({
           student={editStudent}
           onClose={() => setEditStudent(null)}
           onSave={handleSave}
+          scheduleEditable={ftiAdmin}
+          interviewerCommentEditable={ftiAdmin}
         />
       )}
       {parentStudent && (
@@ -315,6 +506,36 @@ export default function LpkSiswaTable({
           student={detailStudent}
           onClose={() => setDetailStudent(null)}
         />
+      )}
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="w-full max-w-md bg-white border border-gray-200 shadow-2xl p-6">
+            <h2 className="text-lg font-serif text-gray-900 mb-2">Hapus data siswa?</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              <strong>{pendingDelete.nama_lengkap}</strong> akan dihapus dari data LPK Mitra.
+              Tindakan ini hanya tersedia untuk admin FTI.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                className="px-4 py-2 text-xs font-semibold uppercase tracking-wider border border-gray-300 text-gray-600"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDelete?.(pendingDelete);
+                  setPendingDelete(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold uppercase tracking-wider bg-red-600 text-white"
+              >
+                Hapus
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

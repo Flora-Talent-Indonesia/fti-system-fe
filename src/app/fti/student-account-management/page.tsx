@@ -3,12 +3,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import PortalPageShell from '@/components/PortalPageShell';
-import { ArrowLeft, KeyRound, Search, UserCog, Ban, UserPen, Eye, EyeOff, BookOpen, Plus, Users, CheckSquare } from 'lucide-react';
+import TablePagination from '@/components/TablePagination';
+import { useTablePagination } from '@/hooks/useTablePagination';
+import { ArrowLeft, KeyRound, UserCog, Ban, UserPen, Eye, EyeOff, BookOpen, Plus, Users, CheckSquare, Pencil, X, UserPlus } from 'lucide-react';
+import SearchField from '@/components/SearchField';
 import { createPortal } from 'react-dom';
 import { toast } from 'react-hot-toast';
 import { Trash2 } from 'lucide-react';
 import FtiApiUser from '@/lib/fti-api-user';
 import FtiApiKelas from '@/lib/fti-api-kelas';
+import KelasPertemuanField, { pertemuanInput } from '@/components/fti/KelasPertemuanField';
+import { LPK_PARTNERS } from '@/data/mock';
+import { KELAS_CABANG, KELAS_JALUR, jalurLabel, kelasPlacementLabel, pertemuanRule } from '@/lib/fti-kelas-storage';
+import { lpkAsalByUsername } from '@/app/guru-dashboard/lpk-members';
+import type { KelasCabang, KelasJalur } from '@/types/student-account';
+
+const ACTION_ICON = "inline-flex h-8 w-8 shrink-0 items-center justify-center border";
 
 type ListUserRow = {
   user_id: number;
@@ -18,11 +28,15 @@ type ListUserRow = {
   is_active: number;
   id_kelas?: number | null;
   kelas?: string | null;
+  asal?: string;
 };
 
 type KelasRow = {
   id_kelas: number;
   nama_kelas: string;
+  cabang?: KelasCabang | null;
+  jalur?: KelasJalur | null;
+  pertemuan?: number | null;
   is_active: number;
   created_at: string;
   created_by: string | null;
@@ -57,15 +71,25 @@ export default function StudentAccountManagementPage() {
   const [savingClass, setSavingClass] = useState(false);
 
   const [selectedKelas, setSelectedKelas] = useState<string>('');
-  const [selectedAngkatan, setSelectedAngkatan] = useState<string>('');
+  const [placementFilter, setPlacementFilter] = useState<'all' | 'in' | 'out'>('all');
   const [manualClasses, setManualClasses] = useState<string[]>([]);
   const [isCreateClassOpen, setIsCreateClassOpen] = useState(false);
   const [newClassName, setNewClassName] = useState('');
+  const [newClassCabang, setNewClassCabang] = useState<KelasCabang | ''>('');
+  const [newClassJalur, setNewClassJalur] = useState<KelasJalur | ''>('');
+  const [newClassPertemuan, setNewClassPertemuan] = useState('');
   const [savingCreateClass, setSavingCreateClass] = useState(false);
   const [kelasList, setKelasList] = useState<KelasRow[]>([]);
   const [loadingKelasList, setLoadingKelasList] = useState(false);
-  const [editingKelasId, setEditingKelasId] = useState<number | null>(null);
+  const [editKelasTarget, setEditKelasTarget] = useState<KelasRow | null>(null);
   const [editKelasName, setEditKelasName] = useState('');
+  const [editKelasCabang, setEditKelasCabang] = useState<KelasCabang | ''>('');
+  const [editKelasJalur, setEditKelasJalur] = useState<KelasJalur | ''>('');
+  const [editKelasPertemuan, setEditKelasPertemuan] = useState('');
+  const [kelasPeople, setKelasPeople] = useState<ListUserRow[]>([]);
+  const [memberIds, setMemberIds] = useState<number[]>([]);
+  const [addStudentQuery, setAddStudentQuery] = useState('');
+  const [addStudentSource, setAddStudentSource] = useState('semua');
   const [savingEditKelas, setSavingEditKelas] = useState(false);
   const [deactivateKelas, setDeactivateKelas] = useState<KelasRow | null>(null);
   const [deactivatingKelas, setDeactivatingKelas] = useState(false);
@@ -144,19 +168,6 @@ export default function StudentAccountManagementPage() {
     void fetchKelas();
   }, [fetchKelas]);
 
-  const angkatanSet = useMemo(() => {
-    const angkatan = new Set<string>();
-    rows.forEach((r) => {
-      const match = r.user_name?.match(/FTI(\d{2})/i);
-      if (match) {
-        angkatan.add(`Angkatan ${parseInt(match[1], 10)}`);
-      } else {
-        angkatan.add('Lainnya');
-      }
-    });
-    return Array.from(angkatan).sort();
-  }, [rows]);
-
   const kelasSet = useMemo(() => {
     const kelas = new Set<string>();
     rows.forEach((r) => {
@@ -172,21 +183,37 @@ export default function StudentAccountManagementPage() {
     return rows.filter((r) => {
       const matchSearch = !q || r.name.toLowerCase().includes(q) || String(r.user_name || '').toLowerCase().includes(q);
 
-      let matchAngkatan = true;
-      if (selectedAngkatan) {
-        const match = r.user_name?.match(/FTI(\d{2})/i);
-        const angkatanLabel = match ? `Angkatan ${parseInt(match[1], 10)}` : 'Lainnya';
-        matchAngkatan = angkatanLabel === selectedAngkatan;
-      }
-
       let matchKelas = true;
       if (selectedKelas) {
         matchKelas = (r.kelas || '') === selectedKelas;
       }
 
-      return matchSearch && matchAngkatan && matchKelas;
+      const inClass = r.id_kelas != null;
+      const matchPlacement =
+        placementFilter === 'all' || (placementFilter === 'in' ? inClass : !inClass);
+
+      return matchSearch && matchKelas && matchPlacement;
     });
-  }, [rows, search, selectedAngkatan, selectedKelas]);
+  }, [rows, search, selectedKelas, placementFilter]);
+
+  const placedCount = useMemo(() => rows.filter((r) => r.id_kelas != null).length, [rows]);
+  const unplacedCount = rows.length - placedCount;
+
+  const {
+    paginatedItems,
+    currentPage,
+    pageSize,
+    totalItems,
+    totalPages,
+    rangeStart,
+    rangeEnd,
+    minPageSize,
+    presetPageSizes,
+    isCustomPageSize,
+    setCurrentPage,
+    setPageSize,
+    setIsCustomPageSize,
+  } = useTablePagination(filtered, { defaultPageSize: 10 });
 
   useEffect(() => {
     setSelectedUserIds([]);
@@ -232,6 +259,97 @@ export default function StudentAccountManagementPage() {
   const closeClassModal = () => {
     setClassModalUser(null);
     setEditedClass('');
+  };
+
+  const closeKelasEditor = () => {
+    setEditKelasTarget(null);
+    setEditKelasName('');
+    setEditKelasCabang('');
+    setEditKelasJalur('');
+    setEditKelasPertemuan('');
+    setKelasPeople([]);
+    setMemberIds([]);
+    setAddStudentQuery('');
+    setAddStudentSource('semua');
+  };
+
+  const openKelasEditor = async (kelas: KelasRow) => {
+    setEditKelasTarget(kelas);
+    setEditKelasName(kelas.nama_kelas);
+    setEditKelasCabang(kelas.cabang ?? '');
+    setEditKelasJalur(kelas.jalur ?? '');
+    const rule = pertemuanRule(kelas.jalur);
+    setEditKelasPertemuan(rule ? String(kelas.pertemuan ?? rule.defaultSessions) : '');
+    setAddStudentQuery('');
+    setAddStudentSource('semua');
+    try {
+      const [activeRes, inactiveRes] = await Promise.all([
+        FtiApiUser().getAllActiveUser(),
+        FtiApiUser().getAllInactiveUser(),
+      ]);
+      const people = [...(Array.isArray(activeRes?.data) ? activeRes.data : []), ...(Array.isArray(inactiveRes?.data) ? inactiveRes.data : [])]
+        .filter((user: ListUserRow) => Number(user?.is_admin) === 0);
+      const asal = lpkAsalByUsername();
+      const withAsal = people.map((user: ListUserRow) => ({
+        ...user,
+        asal: asal.get(String(user.user_name || '').trim().toUpperCase()) || '',
+      }));
+      setKelasPeople(withAsal);
+      setMemberIds(withAsal.filter((user) => user.id_kelas === kelas.id_kelas).map((user) => user.user_id));
+    } catch {
+      setKelasPeople([]);
+      setMemberIds([]);
+      toast.error('Gagal memuat siswa di kelas ini.');
+    }
+  };
+
+  const saveKelasEditor = async () => {
+    if (!editKelasTarget) return;
+    if (!editKelasCabang) {
+      toast.error('Pilih TC Bogor atau Jakarta');
+      return;
+    }
+    if (!editKelasName.trim()) {
+      toast.error('Nama kelas tidak boleh kosong');
+      return;
+    }
+    if (!editKelasJalur) {
+      toast.error('Pilih penilaian');
+      return;
+    }
+    setSavingEditKelas(true);
+    try {
+      const res = await FtiApiKelas().putUpdateKelas({
+        id_kelas: editKelasTarget.id_kelas,
+        nama_kelas: editKelasName.trim(),
+        cabang: editKelasCabang,
+        jalur: editKelasJalur,
+        pertemuan: pertemuanInput(editKelasJalur, editKelasPertemuan),
+      });
+      if (res?.status !== 200) {
+        toast.error(res?.message || 'Gagal memperbarui kelas.');
+        return;
+      }
+      const original = new Set(
+        kelasPeople.filter((user) => user.id_kelas === editKelasTarget.id_kelas).map((user) => user.user_id),
+      );
+      const next = new Set(memberIds);
+      const added = [...next].filter((id) => !original.has(id));
+      const removed = [...original].filter((id) => !next.has(id));
+      if (added.length > 0) {
+        await FtiApiUser().putBulkAssignKelas({ user_ids: added, id_kelas: editKelasTarget.id_kelas });
+      }
+      if (removed.length > 0) {
+        await FtiApiUser().putBulkAssignKelas({ user_ids: removed, id_kelas: null });
+      }
+      toast.success('Kelas dan siswanya berhasil diperbarui.');
+      closeKelasEditor();
+      await Promise.all([fetchStudents(), fetchKelas()]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Terjadi kesalahan.');
+    } finally {
+      setSavingEditKelas(false);
+    }
   };
 
   const submitPassword = async () => {
@@ -509,8 +627,9 @@ export default function StudentAccountManagementPage() {
   };
 
   const handleSelectAll = (checked: boolean) => {
-    if (checked) setSelectedUserIds(filtered.map((u) => u.user_id));
-    else setSelectedUserIds([]);
+    const pageIds = paginatedItems.map((u) => u.user_id);
+    if (checked) setSelectedUserIds((prev) => [...new Set([...prev, ...pageIds])]);
+    else setSelectedUserIds((prev) => prev.filter((id) => !pageIds.includes(id)));
   };
 
   const handleSelectOne = (id: number, checked: boolean) => {
@@ -518,11 +637,12 @@ export default function StudentAccountManagementPage() {
     else setSelectedUserIds((prev) => prev.filter((x) => x !== id));
   };
 
-  const isAllSelected = filtered.length > 0 && selectedUserIds.length === filtered.length;
+  const isAllSelected =
+    paginatedItems.length > 0 && paginatedItems.every((u) => selectedUserIds.includes(u.user_id));
 
   return (
-    <PortalPageShell><main className="min-h-screen bg-[#fdf8fa] font-sans text-gray-800 p-4 md:p-8 relative">
-      <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <PortalPageShell fill><main className="flex h-full min-h-0 flex-col overflow-hidden px-4 pb-4 pt-4 font-sans text-gray-800 md:px-6 md:pb-5 md:pt-5">
+      <header className="mb-4 flex shrink-0 flex-col justify-between gap-4 md:flex-row md:items-center">
         <div className="flex items-center gap-4">
           <Link
             href="/fti"
@@ -545,32 +665,25 @@ export default function StudentAccountManagementPage() {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsCreateClassOpen(true)}
-          className="shrink-0 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-pink text-xs tracking-widest uppercase text-white hover:bg-[var(--primary-pink-hover)] transition-colors shadow-sm self-start md:self-auto"
-        >
-          <Plus size={16} strokeWidth={1.5} />
-          Buat Kelas Baru
-        </button>
       </header>
 
-      <div className="bg-white border border-gray-200/60 shadow-sm">
-        <div className="p-4 md:p-6 border-b border-gray-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-2 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] xl:grid-rows-1">
+      <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white border border-gray-200/60 shadow-sm">
+        <div className="shrink-0 border-b border-gray-100 p-4">
           <div className="flex flex-col sm:flex-row flex-wrap sm:items-center gap-4 w-full xl:max-w-5xl">
-            <div className="relative group w-full sm:max-w-xs">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#be185d] transition-colors"
-                size={18}
-                strokeWidth={1.5}
-              />
-              <input
-                type="search"
-                placeholder="Cari nama atau username (NIM)…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 pr-4 py-2 w-full bg-transparent border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-pink text-sm"
-              />
+            <SearchField variant="box" className="w-full sm:max-w-xs" value={search} onChange={setSearch} />
+
+            <div className="relative w-full sm:max-w-[240px]">
+              <select
+                value={placementFilter}
+                onChange={(e) => setPlacementFilter(e.target.value as 'all' | 'in' | 'out')}
+                className="appearance-none w-full border border-gray-200 bg-white px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-pink cursor-pointer"
+              >
+                <option value="all">Semua siswa</option>
+                <option value="in">Sudah masuk kelas ({placedCount})</option>
+                <option value="out">Belum masuk kelas ({unplacedCount})</option>
+              </select>
+              <BookOpen className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
             </div>
 
             <div className="relative w-full sm:max-w-[200px]">
@@ -599,20 +712,6 @@ export default function StudentAccountManagementPage() {
               >
                 <option value="1">Akun Aktif</option>
                 <option value="0">Akun Nonaktif</option>
-              </select>
-              <Users className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-            </div>
-
-            <div className="relative w-full sm:max-w-[200px]">
-              <select
-                value={selectedAngkatan}
-                onChange={(e) => setSelectedAngkatan(e.target.value)}
-                className="appearance-none w-full border border-gray-200 bg-white px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-pink cursor-pointer"
-              >
-                <option value="">Semua Angkatan</option>
-                {angkatanSet.map((a) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
               </select>
               <Users className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
             </div>
@@ -676,20 +775,24 @@ export default function StudentAccountManagementPage() {
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        <div className="min-h-0 flex-1 overflow-auto">
           {loading ? (
             <div className="p-16 text-center text-gray-500 text-sm">Memuat daftar siswa…</div>
           ) : filtered.length === 0 ? (
             <div className="p-16 text-center text-gray-500 text-sm">
               {rows.length === 0
                 ? 'Belum ada akun siswa aktif, atau gagal memuat data.'
-                : 'Tidak ada hasil yang cocok dengan pencarian.'}
+                : placementFilter === 'in'
+                  ? 'Tidak ada siswa yang sudah masuk kelas.'
+                  : placementFilter === 'out'
+                    ? 'Tidak ada siswa yang belum masuk kelas.'
+                    : 'Tidak ada hasil yang cocok dengan pencarian.'}
             </div>
           ) : (
-            <table className="w-full text-sm text-left whitespace-nowrap">
-              <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
+            <table className="w-full table-fixed text-sm text-left">
+              <thead className="sticky top-0 z-10 text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
                 <tr>
-                  <th scope="col" className={`px-4 py-4 font-semibold ${isBulkMode ? 'w-12 text-center' : ''}`}>
+                  <th scope="col" className={`px-3 py-3 font-semibold ${isBulkMode ? 'w-12 text-center' : 'w-12'}`}>
                     {isBulkMode ? (
                       <input
                         type="checkbox"
@@ -701,28 +804,28 @@ export default function StudentAccountManagementPage() {
                       'No'
                     )}
                   </th>
-                  <th scope="col" className="px-4 py-4 font-semibold">
+                  <th scope="col" className="w-[22%] px-3 py-3 font-semibold">
                     Nama
                   </th>
-                  <th scope="col" className="px-4 py-4 font-semibold">
-                    Username (NIM)
+                  <th scope="col" className="w-[22%] px-3 py-3 font-semibold">
+                    Username (ID Peserta)
                   </th>
-                  <th scope="col" className="px-4 py-4 font-semibold">
+                  <th scope="col" className="px-3 py-3 font-semibold">
                     Kelas
                   </th>
                   {!isBulkMode && (
-                    <th scope="col" className="px-4 py-4 font-semibold text-center sticky right-0 bg-gray-100 border-l border-gray-200">
+                    <th scope="col" className="w-[160px] px-2 py-3 text-center font-semibold">
                       Aksi
                     </th>
                   )}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((u, i) => {
+                {paginatedItems.map((u, i) => {
                   const isSelected = selectedUserIds.includes(u.user_id);
                   return (
                     <tr key={u.user_id} className={`border-b border-gray-100 hover:bg-primary-pink-light/40 ${isSelected ? 'bg-primary-pink-light/50/30' : 'bg-white'}`}>
-                      <td className={`px-4 py-4 ${isBulkMode ? 'text-center' : 'text-gray-500'}`}>
+                      <td className={`px-3 py-1.5 ${isBulkMode ? 'text-center' : 'text-gray-500'}`}>
                         {isBulkMode ? (
                           <input
                             type="checkbox"
@@ -731,14 +834,14 @@ export default function StudentAccountManagementPage() {
                             onChange={(e) => handleSelectOne(u.user_id, e.target.checked)}
                           />
                         ) : (
-                          i + 1
+                          rangeStart + i
                         )}
                       </td>
-                      <td className="px-4 py-4 font-medium text-gray-900">{u.name}</td>
-                      <td className="px-4 py-4 font-mono text-[#be185d]">{u.user_name}</td>
-                      <td className="px-4 py-4">
+                      <td className="truncate px-3 py-1.5 font-medium text-gray-900">{u.name}</td>
+                      <td className="truncate px-3 py-1.5 font-mono text-[#be185d]">{u.user_name}</td>
+                      <td className="px-3 py-1.5">
                         {u.kelas ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-pink-light text-[#be185d]">
+                          <span className="block truncate text-xs font-medium text-[#be185d]" title={u.kelas}>
                             {u.kelas}
                           </span>
                         ) : (
@@ -746,41 +849,45 @@ export default function StudentAccountManagementPage() {
                         )}
                       </td>
                       {!isBulkMode && (
-                        <td className="px-4 py-4 text-right sticky right-0 bg-white border-l border-gray-100 shadow-[-4px_0_8px_rgba(0,0,0,0.04)]">
-                          <div className="inline-flex flex-wrap items-center justify-end gap-2">
+                        <td className="px-2 py-1.5 text-right">
+                          <div className="inline-flex items-center justify-end gap-1">
                             {!showInactive ? (
                               <>
                                 <button
                                   type="button"
                                   onClick={() => openPasswordModal(u)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#be185d] border border-primary-pink/30 bg-primary-pink-light hover:bg-primary-pink-light transition-colors"
+                                  title="Ubah password"
+                                  aria-label="Ubah password"
+                                  className={`${ACTION_ICON} border-primary-pink/30 bg-primary-pink-light text-[#be185d]`}
                                 >
-                                  <KeyRound size={14} />
-                                  Ubah password
+                                  <KeyRound size={15} />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => openClassModal(u)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#be185d] border border-primary-pink/30 bg-primary-pink-light/50 hover:bg-primary-pink-light transition-colors"
+                                  title="Assign kelas"
+                                  aria-label="Assign kelas"
+                                  className={`${ACTION_ICON} border-primary-pink/30 bg-primary-pink-light text-[#be185d]`}
                                 >
-                                  <BookOpen size={14} />
-                                  Assign kelas
+                                  <BookOpen size={15} />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => openNameModal(u)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                                  title="Ubah nama"
+                                  aria-label="Ubah nama"
+                                  className={`${ACTION_ICON} border-emerald-200 bg-emerald-50 text-emerald-700`}
                                 >
-                                  <UserPen size={14} />
-                                  Ubah nama
+                                  <UserPen size={15} />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setDeactivateUser(u)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 border border-red-200 bg-red-50 hover:bg-red-100 transition-colors"
+                                  title="Nonaktifkan"
+                                  aria-label="Nonaktifkan"
+                                  className={`${ACTION_ICON} border-red-200 bg-red-50 text-red-700`}
                                 >
-                                  <Ban size={14} />
-                                  Nonaktifkan
+                                  <Ban size={15} />
                                 </button>
                               </>
                             ) : (
@@ -788,18 +895,20 @@ export default function StudentAccountManagementPage() {
                                 <button
                                   type="button"
                                   onClick={() => setActivateUser(u)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                                  title="Aktifkan akun"
+                                  aria-label="Aktifkan akun"
+                                  className={`${ACTION_ICON} border-emerald-200 bg-emerald-50 text-emerald-700`}
                                 >
-                                  <CheckSquare size={14} />
-                                  Aktifkan Akun
+                                  <CheckSquare size={15} />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setHardDeleteUser(u)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 border border-red-200 bg-red-50 hover:bg-red-100 transition-colors"
+                                  title="Hapus permanen"
+                                  aria-label="Hapus permanen"
+                                  className={`${ACTION_ICON} border-red-200 bg-red-50 text-red-700`}
                                 >
-                                  <Trash2 size={14} />
-                                  Hapus Permanen
+                                  <Trash2 size={15} />
                                 </button>
                               </>
                             )}
@@ -813,6 +922,22 @@ export default function StudentAccountManagementPage() {
             </table>
           )}
         </div>
+          {filtered.length > 0 && (
+            <TablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              rangeStart={rangeStart}
+              rangeEnd={rangeEnd}
+              pageSize={pageSize}
+              minPageSize={minPageSize}
+              presetPageSizes={presetPageSizes}
+              isCustomPageSize={isCustomPageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+              onCustomModeChange={setIsCustomPageSize}
+            />
+          )}
       </div>
 
       {mounted && passwordModalUser
@@ -966,8 +1091,8 @@ export default function StudentAccountManagementPage() {
               <h2 className="text-lg font-serif text-gray-900 mb-2">Nonaktifkan akun siswa?</h2>
               <p className="text-sm text-gray-600 leading-relaxed">
                 Akun <span className="font-mono font-medium">{deactivateUser.user_name}</span> ({deactivateUser.name})
-                akan dinonaktifkan. Siswa tidak dapat login hingga akun diaktifkan kembali dari sisi
-                administrasi database jika fitur itu tersedia.
+                akan dinonaktifkan dan disembunyikan dari daftar data. Datanya tetap tersimpan
+                dan dapat dilihat di daftar siswa nonaktif.
               </p>
               <div className="mt-6 flex justify-end gap-3">
                 <button
@@ -1059,7 +1184,7 @@ export default function StudentAccountManagementPage() {
                   {loadingKelasList
                     ? <option disabled>Memuat kelas…</option>
                     : activeKelasOptions.map((k) => (
-                      <option key={k.id_kelas} value={String(k.id_kelas)}>{k.nama_kelas}</option>
+                      <option key={k.id_kelas} value={String(k.id_kelas)}>{kelasPlacementLabel(k)}</option>
                     ))
                   }
                 </select>
@@ -1111,25 +1236,58 @@ export default function StudentAccountManagementPage() {
             <div
               role="dialog"
               aria-modal="true"
-              className="relative z-10 w-full max-w-2xl bg-white border border-gray-200 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto"
+              className="relative z-10 w-full max-w-lg bg-white border border-gray-200 shadow-2xl flex flex-col max-h-[90vh] overflow-y-auto"
             >
               {/* Header + Form */}
               <div className="p-6 border-b border-gray-100">
                 <h2 className="text-lg font-serif text-gray-900 mb-1">Buat Kelas Baru</h2>
                 <p className="text-xs text-gray-500 mb-5">
-                  Tambahkan nama kelas baru agar bisa di-assign ke siswa.
+                  Tentukan TC, nama kelas, dan penilaian. Magang, Flora Ikusei, dan Reguler punya jumlah pertemuan.
                 </p>
-                <label className="block">
-                  <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Nama Kelas</span>
-                  <input
-                    type="text"
-                    value={newClassName}
-                    onChange={(e) => setNewClassName(e.target.value)}
-                    className="mt-2 w-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-pink"
-                    placeholder="Contoh: Kelas A, Kelas N4 Sore..."
-                    autoFocus
-                  />
-                </label>
+                <div className="space-y-4">
+                  <label className="block">
+                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">TC (Cabang)</span>
+                    <select
+                      value={newClassCabang}
+                      onChange={(e) => setNewClassCabang(e.target.value as KelasCabang | '')}
+                      className="mt-2 w-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-pink"
+                    >
+                      <option value="">Pilih Bogor atau Jakarta</option>
+                      {KELAS_CABANG.map((cabang) => (
+                        <option key={cabang} value={cabang}>{cabang}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Nama Kelas</span>
+                    <input
+                      type="text"
+                      value={newClassName}
+                      onChange={(e) => setNewClassName(e.target.value)}
+                      className="mt-2 w-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-pink"
+                      placeholder="Contoh: Kelas Magang 1, Kelas Flora Ikusei 1..."
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Penilaian</span>
+                    <select
+                      value={newClassJalur}
+                      onChange={(e) => {
+                        const next = e.target.value as KelasJalur | '';
+                        setNewClassJalur(next);
+                        const rule = pertemuanRule(next);
+                        setNewClassPertemuan(rule ? String(rule.defaultSessions) : '');
+                      }}
+                      className="mt-2 w-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-pink"
+                    >
+                      <option value="">Pilih penilaian</option>
+                      {KELAS_JALUR.map((jalur) => (
+                        <option key={jalur.id} value={jalur.id}>{jalur.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <KelasPertemuanField jalur={newClassJalur} value={newClassPertemuan} onChange={setNewClassPertemuan} />
+                </div>
                 <div className="mt-4 flex justify-end gap-3">
                   <button
                     type="button"
@@ -1141,17 +1299,33 @@ export default function StudentAccountManagementPage() {
                   <button
                     type="button"
                     onClick={async () => {
+                      if (!newClassCabang) {
+                        toast.error('Pilih TC Bogor atau Jakarta');
+                        return;
+                      }
                       if (!newClassName.trim()) {
                         toast.error('Nama kelas tidak boleh kosong');
                         return;
                       }
+                      if (!newClassJalur) {
+                        toast.error('Pilih penilaian');
+                        return;
+                      }
                       setSavingCreateClass(true);
                       try {
-                        const res = await FtiApiKelas().postCreateKelas({ nama_kelas: newClassName.trim() });
+                        const res = await FtiApiKelas().postCreateKelas({
+                          nama_kelas: newClassName.trim(),
+                          cabang: newClassCabang,
+                          jalur: newClassJalur,
+                          pertemuan: pertemuanInput(newClassJalur, newClassPertemuan),
+                        });
                         if (res?.status === 200) {
                           setManualClasses(prev => [...prev, newClassName.trim()]);
                           toast.success(`Kelas "${newClassName.trim()}" berhasil dibuat.`);
                           setNewClassName('');
+                          setNewClassCabang('');
+                          setNewClassJalur('');
+                          setNewClassPertemuan('');
                           // Refresh tabel kelas
                           const listRes = await FtiApiKelas().getListKelas();
                           if (listRes?.status === 200 && Array.isArray(listRes.data)) {
@@ -1173,16 +1347,19 @@ export default function StudentAccountManagementPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>,
+          document.body,
+        )
+        : null}
 
-              {/* Panel tabel daftar kelas */}
-              <div className="mx-6 mb-6 mt-2 border border-gray-200 rounded-sm">
-                {/* Panel header */}
-                <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+      <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-white border border-gray-200/60 shadow-sm">
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3">
                   <div className="flex items-center gap-4">
                     <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
                       Daftar Kelas
                     </span>
-                    <div className="flex bg-gray-200 p-0.5 rounded-sm">
+                    <div className="flex bg-gray-200 p-0.5">
                       <button
                         type="button"
                         onClick={() => setShowInactiveKelas(false)}
@@ -1200,17 +1377,22 @@ export default function StudentAccountManagementPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsCreateClassOpen(true)}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary-pink text-[11px] tracking-widest uppercase text-white hover:bg-[var(--primary-pink-hover)] transition-colors"
+                    >
+                      <Plus size={14} strokeWidth={1.5} />
+                      Buat Kelas
+                    </button>
                     {loadingKelasList && (
                       <span className="text-[11px] text-primary-pink animate-pulse">Memuat…</span>
-                    )}
-                    {editingKelasId !== null && (
-                      <span className="text-[11px] text-amber-600 font-medium">Mode Edit Aktif</span>
                     )}
                   </div>
                 </div>
 
                 {/* Konten panel */}
-                <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                <div className="min-h-0 flex-1 overflow-auto">
                   {loadingKelasList ? (
                     <div className="px-4 py-8 text-center text-sm text-gray-400">Memuat data kelas…</div>
                   ) : kelasList.filter((k) => (showInactiveKelas ? k.is_active === 0 : k.is_active === 1)).length === 0 ? (
@@ -1218,36 +1400,25 @@ export default function StudentAccountManagementPage() {
                       {showInactiveKelas ? 'Belum ada kelas nonaktif.' : 'Belum ada kelas aktif.'}
                     </div>
                   ) : (
-                    <table className="min-w-max text-xs text-left whitespace-nowrap">
-                      <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
+                    <table className="w-full table-fixed text-xs text-left">
+                      <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
                         <tr>
-                          <th className="px-4 py-2.5 font-semibold text-gray-600 uppercase tracking-wide min-w-[180px] sticky left-0 z-10 bg-gray-50 shadow-[1px_0_0_0_#e5e7eb]">Nama Kelas</th>
-                          <th className="px-4 py-2.5 font-semibold text-gray-600 uppercase tracking-wide w-24 sticky left-[180px] z-10 bg-gray-50 shadow-[1px_0_0_0_#e5e7eb]">Status</th>
-                          <th className="px-4 py-2.5 font-semibold text-gray-600 uppercase tracking-wide">Dibuat Oleh</th>
-                          <th className="px-4 py-2.5 font-semibold text-gray-600 uppercase tracking-wide">Diedit Oleh</th>
-                          <th className="px-4 py-2.5 font-semibold text-gray-600 uppercase tracking-wide w-28 text-center sticky right-0 z-10 bg-gray-50 shadow-[-1px_0_0_0_#e5e7eb]">Aksi</th>
+                          <th className="w-[18%] px-3 py-2.5 font-semibold text-gray-600 uppercase tracking-wide">TC</th>
+                          <th className="w-[24%] px-3 py-2.5 font-semibold text-gray-600 uppercase tracking-wide">Penilaian</th>
+                          <th className="px-3 py-2.5 font-semibold text-gray-600 uppercase tracking-wide">Nama Kelas</th>
+                          <th className="w-[12%] px-3 py-2.5 font-semibold text-gray-600 uppercase tracking-wide">Pertemuan</th>
+                          <th className="w-[18%] px-3 py-2.5 font-semibold text-gray-600 uppercase tracking-wide">Status</th>
+                          <th className="w-[92px] px-3 py-2.5 text-center font-semibold text-gray-600 uppercase tracking-wide">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-100">
                         {kelasList.filter((k) => (showInactiveKelas ? k.is_active === 0 : k.is_active === 1)).map((k) => (
                           <tr key={k.id_kelas} className="group hover:bg-primary-pink-light/30 transition-colors">
-                            <td className="px-4 py-2 font-medium text-gray-900 min-w-[180px] sticky left-0 z-[5] bg-white group-hover:bg-primary-pink-light shadow-[1px_0_0_0_#e5e7eb]">
-                              {editingKelasId === k.id_kelas ? (
-                                <input
-                                  type="text"
-                                  value={editKelasName}
-                                  onChange={(e) => setEditKelasName(e.target.value)}
-                                  className="w-full border border-primary-pink bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-pink rounded-sm"
-                                  autoFocus
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Escape') { setEditingKelasId(null); setEditKelasName(''); }
-                                  }}
-                                />
-                              ) : (
-                                k.nama_kelas
-                              )}
-                            </td>
-                            <td className="px-4 py-2 w-24 sticky left-[180px] z-[5] bg-white group-hover:bg-primary-pink-light shadow-[1px_0_0_0_#e5e7eb]">
+                            <td className="truncate px-3 py-2 text-gray-700">{k.cabang || 'Belum diisi'}</td>
+                            <td className="truncate px-3 py-2 text-gray-700">{jalurLabel(k.jalur)}</td>
+                            <td className="truncate px-3 py-2 font-medium text-gray-900">{k.nama_kelas}</td>
+                            <td className="px-3 py-2 tabular-nums text-gray-700">{k.pertemuan ?? '—'}</td>
+                            <td className="px-3 py-2">
                               {k.is_active === 1 ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
@@ -1260,87 +1431,52 @@ export default function StudentAccountManagementPage() {
                                 </span>
                               )}
                             </td>
-                            <td className="px-4 py-2 text-gray-600">{k.created_by ?? <span className="text-gray-300">—</span>}</td>
-                            <td className="px-4 py-2 text-gray-600">{k.edit_by ?? <span className="text-gray-300">—</span>}</td>
-                            <td className="px-4 py-2 text-center sticky right-0 z-[5] bg-white group-hover:bg-primary-pink-light shadow-[-1px_0_0_0_#e5e7eb]">
-                              {editingKelasId === k.id_kelas ? (
-                                <div className="inline-flex items-center gap-1.5">
+                            <td className="px-2 py-2 text-center">
+                              <div className="inline-flex items-center justify-center gap-1">
+                                {k.is_active === 1 && (
                                   <button
                                     type="button"
-                                    disabled={savingEditKelas}
-                                    onClick={async () => {
-                                      if (!editKelasName.trim()) { toast.error('Nama kelas tidak boleh kosong'); return; }
-                                      setSavingEditKelas(true);
-                                      try {
-                                        const res = await FtiApiKelas().putUpdateKelas({ id_kelas: k.id_kelas, nama_kelas: editKelasName.trim() });
-                                        if (res?.status === 200) {
-                                          toast.success('Nama kelas berhasil diperbarui.');
-                                          setEditingKelasId(null);
-                                          setEditKelasName('');
-                                          const listRes = await FtiApiKelas().getListKelas();
-                                          if (listRes?.status === 200 && Array.isArray(listRes.data)) {
-                                            setKelasList(listRes.data as KelasRow[]);
-                                          }
-                                        } else {
-                                          toast.error(res?.message || 'Gagal memperbarui kelas.');
-                                        }
-                                      } catch (e) {
-                                        toast.error(e instanceof Error ? e.message : 'Terjadi kesalahan.');
-                                      } finally {
-                                        setSavingEditKelas(false);
-                                      }
-                                    }}
-                                    className="px-2 py-1 text-[11px] font-medium text-white bg-primary-pink hover:bg-[var(--primary-pink-hover)] disabled:opacity-50 rounded-sm"
+                                    title="Edit kelas dan siswa"
+                                    aria-label="Edit kelas dan siswa"
+                                    onClick={() => void openKelasEditor(k)}
+                                    className={`${ACTION_ICON} border-primary-pink/30 bg-primary-pink-light/50 text-[#be185d]`}
                                   >
-                                    {savingEditKelas ? 'Menyimpan…' : 'Simpan'}
+                                    <Pencil size={15} />
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setEditingKelasId(null); setEditKelasName(''); }}
-                                    className="px-2 py-1 text-[11px] font-medium text-gray-600 border border-gray-300 hover:bg-gray-100 rounded-sm"
-                                  >
-                                    Batal
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="inline-flex items-center gap-1.5">
-                                  {k.is_active === 1 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => { setEditingKelasId(k.id_kelas); setEditKelasName(k.nama_kelas); }}
-                                      className="px-2.5 py-1 text-[11px] font-medium text-[#be185d] border border-primary-pink/30 bg-primary-pink-light/50 hover:bg-primary-pink-light rounded-sm transition-colors"
-                                    >
-                                      Edit
-                                    </button>
-                                  )}
+                                )}
                                   {k.is_active === 1 ? (
                                     <button
                                       type="button"
+                                      title="Nonaktifkan"
+                                      aria-label="Nonaktifkan"
                                       onClick={() => setDeactivateKelas(k)}
-                                      className="px-2.5 py-1 text-[11px] font-medium text-red-700 border border-red-200 bg-red-50 hover:bg-red-100 rounded-sm transition-colors"
+                                      className={`${ACTION_ICON} border-red-200 bg-red-50 text-red-700`}
                                     >
-                                      Nonaktifkan
+                                      <Ban size={15} />
                                     </button>
                                   ) : (
                                     <>
                                       <button
                                         type="button"
+                                        title="Aktifkan"
+                                        aria-label="Aktifkan"
                                         onClick={() => setActivateKelasRow(k)}
-                                        className="px-2.5 py-1 text-[11px] font-medium text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 rounded-sm transition-colors"
+                                        className={`${ACTION_ICON} border-emerald-200 bg-emerald-50 text-emerald-700`}
                                       >
-                                        Aktifkan
+                                        <CheckSquare size={15} />
                                       </button>
                                       <button
                                         type="button"
+                                        title="Hapus permanen"
+                                        aria-label="Hapus permanen"
                                         onClick={() => setHardDeleteKelasRow(k)}
-                                        className="px-2.5 py-1 text-[11px] font-medium text-red-700 border border-red-200 bg-red-50 hover:bg-red-100 rounded-sm transition-colors"
+                                        className={`${ACTION_ICON} border-red-200 bg-red-50 text-red-700`}
                                       >
-                                        Hapus Permanen
+                                        <Trash2 size={15} />
                                       </button>
                                     </>
                                   )}
                                 </div>
-                              )}
                             </td>
                           </tr>
                         ))}
@@ -1349,6 +1485,176 @@ export default function StudentAccountManagementPage() {
                     </table>
                   )}
                 </div>
+      </section>
+      </div>
+
+      {/* Layer edit kelas dan siswa di dalamnya */}
+      {mounted && editKelasTarget
+        ? createPortal(
+          <div className="fixed inset-0 z-[125] flex items-center justify-center bg-black/45 p-4">
+            <div className="absolute inset-0" onClick={closeKelasEditor} aria-hidden />
+            <div role="dialog" aria-modal="true" className="relative z-10 flex max-h-[90vh] w-full max-w-4xl flex-col bg-white border border-gray-200 shadow-2xl">
+              <div className="shrink-0 border-b border-gray-100 p-5">
+                <h2 className="text-lg font-serif text-gray-900">Edit Kelas</h2>
+                <p className="mt-1 text-xs text-gray-500">
+                  Ubah data kelas, keluarkan siswa yang ada, atau tambahkan siswa ke kelas ini.
+                </p>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <label className="block">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">TC</span>
+                    <select
+                      value={editKelasCabang}
+                      onChange={(e) => setEditKelasCabang(e.target.value as KelasCabang | '')}
+                      className="mt-1 w-full border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-pink"
+                    >
+                      <option value="">Pilih TC</option>
+                      {KELAS_CABANG.map((cabang) => (
+                        <option key={cabang} value={cabang}>{cabang}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">Nama kelas</span>
+                    <input
+                      type="text"
+                      value={editKelasName}
+                      onChange={(e) => setEditKelasName(e.target.value)}
+                      className="mt-1 w-full border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-pink"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">Penilaian</span>
+                    <select
+                      value={editKelasJalur}
+                      onChange={(e) => {
+                        const next = e.target.value as KelasJalur | '';
+                        setEditKelasJalur(next);
+                        const rule = pertemuanRule(next);
+                        setEditKelasPertemuan(rule ? String(editKelasTarget.jalur === next && editKelasTarget.pertemuan ? editKelasTarget.pertemuan : rule.defaultSessions) : '');
+                      }}
+                      className="mt-1 w-full border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-pink"
+                    >
+                      <option value="">Pilih penilaian</option>
+                      {KELAS_JALUR.map((jalur) => (
+                        <option key={jalur.id} value={jalur.id}>{jalur.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="mt-3 max-w-xs">
+                  <KelasPertemuanField jalur={editKelasJalur} value={editKelasPertemuan} onChange={setEditKelasPertemuan} />
+                </div>
+              </div>
+              <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-5 md:grid-cols-2">
+                <div className="flex min-h-0 flex-col">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    Siswa dalam kelas ({kelasPeople.filter((user) => memberIds.includes(user.user_id)).length})
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-auto border border-gray-200">
+                    {kelasPeople.filter((user) => memberIds.includes(user.user_id)).length === 0 ? (
+                      <p className="px-3 py-6 text-center text-xs text-gray-400">Belum ada siswa di kelas ini.</p>
+                    ) : (
+                      kelasPeople.filter((user) => memberIds.includes(user.user_id)).map((user) => (
+                        <div key={user.user_id} className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-gray-900">{user.name}</div>
+                            <div className="truncate font-mono text-[11px] text-gray-500">
+                              {user.user_name}{user.asal ? ` · ${user.asal}` : ''}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            title="Keluarkan dari kelas"
+                            aria-label={`Keluarkan ${user.name}`}
+                            onClick={() => setMemberIds((current) => current.filter((id) => id !== user.user_id))}
+                            className={`${ACTION_ICON} border-red-200 bg-red-50 text-red-700`}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+                <div className="flex min-h-0 flex-col">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-600">Tambah siswa</div>
+                  <div className="mb-2 grid shrink-0 grid-cols-2 gap-2">
+                    <input
+                      type="search"
+                      value={addStudentQuery}
+                      onChange={(e) => setAddStudentQuery(e.target.value)}
+                      placeholder="Cari nama atau ID Peserta"
+                      className="min-w-0 border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-pink"
+                    />
+                    <select
+                      aria-label="Asal siswa"
+                      value={addStudentSource}
+                      onChange={(e) => setAddStudentSource(e.target.value)}
+                      className="min-w-0 cursor-pointer border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-pink"
+                    >
+                      <option value="semua">Semua</option>
+                      <option value="fti">FTI</option>
+                      {LPK_PARTNERS.map((partner) => (
+                        <option key={partner.id} value={partner.name}>{partner.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-auto border border-gray-200">
+                    {kelasPeople.filter((user) => {
+                      if (Number(user.is_active) !== 1 || memberIds.includes(user.user_id)) return false;
+                      if (addStudentSource === 'fti' ? Boolean(user.asal) : addStudentSource !== 'semua' && user.asal !== addStudentSource) return false;
+                      const query = addStudentQuery.trim().toLowerCase();
+                      return !query || user.name.toLowerCase().includes(query) || user.user_name.toLowerCase().includes(query) || (user.asal || '').toLowerCase().includes(query);
+                    }).length === 0 ? (
+                      <p className="px-3 py-6 text-center text-xs text-gray-400">Tidak ada siswa yang bisa ditambahkan.</p>
+                    ) : (
+                      kelasPeople.filter((user) => {
+                        if (Number(user.is_active) !== 1 || memberIds.includes(user.user_id)) return false;
+                        if (addStudentSource === 'fti' ? Boolean(user.asal) : addStudentSource !== 'semua' && user.asal !== addStudentSource) return false;
+                        const query = addStudentQuery.trim().toLowerCase();
+                        return !query || user.name.toLowerCase().includes(query) || user.user_name.toLowerCase().includes(query) || (user.asal || '').toLowerCase().includes(query);
+                      }).map((user) => {
+                        const current = kelasList.find((kelas) => kelas.id_kelas === user.id_kelas);
+                        return (
+                          <div key={user.user_id} className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium text-gray-900">{user.name}</div>
+                              <div className="truncate text-[11px] text-gray-500">
+                                {user.user_name}{user.asal ? ` · ${user.asal}` : ''} · {current ? kelasPlacementLabel(current) : 'Belum ada kelas'}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              title="Tambahkan ke kelas"
+                              aria-label={`Tambahkan ${user.name}`}
+                              onClick={() => setMemberIds((currentIds) => [...currentIds, user.user_id])}
+                              className={`${ACTION_ICON} border-primary-pink/30 bg-primary-pink-light text-[#be185d]`}
+                            >
+                              <UserPlus size={14} />
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex shrink-0 justify-end gap-3 border-t border-gray-100 p-4">
+                <button
+                  type="button"
+                  onClick={closeKelasEditor}
+                  className="px-4 py-2 text-xs tracking-widest uppercase border border-gray-300 text-gray-600 hover:border-gray-500"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveKelasEditor()}
+                  disabled={savingEditKelas}
+                  className="px-4 py-2 text-xs tracking-widest uppercase bg-primary-pink text-white hover:bg-[var(--primary-pink-hover)] disabled:opacity-50"
+                >
+                  {savingEditKelas ? 'Menyimpan…' : 'Simpan'}
+                </button>
               </div>
             </div>
           </div>,
@@ -1533,7 +1839,7 @@ export default function StudentAccountManagementPage() {
                   {loadingKelasList
                     ? <option disabled>Memuat kelas…</option>
                     : activeKelasOptions.map((k) => (
-                      <option key={k.id_kelas} value={String(k.id_kelas)}>{k.nama_kelas}</option>
+                      <option key={k.id_kelas} value={String(k.id_kelas)}>{kelasPlacementLabel(k)}</option>
                     ))
                   }
                 </select>

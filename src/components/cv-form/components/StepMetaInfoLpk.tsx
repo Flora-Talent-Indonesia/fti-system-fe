@@ -5,6 +5,7 @@ import { toast } from "react-hot-toast";
 import { Wand2, Loader2 } from "lucide-react";
 import { FormField, FormSelect } from "./FormControls";
 import type { DokumenPendukung, MetaData, InformasiDasar } from "../types";
+import { SUPPORTING_DOCS } from "@/lib/supporting-docs";
 import {
   DOC_ACCEPT_INPUT,
   PHOTO_ACCEPT_INPUT,
@@ -26,11 +27,16 @@ interface Props {
   onFotoFileChange?: (file: File | null) => void;
   onDokumenFileChange?: (key: keyof DokumenPendukung, file: File | null) => void;
   errors?: Record<string, string>;
+  hideNim?: boolean;
 }
 
 const JK_OPTIONS = [
   { value: "Laki-laki", label: "男 / Laki-laki" },
   { value: "Perempuan", label: "女 / Perempuan" },
+];
+const TANGAN_OPTIONS = [
+  { value: "右", label: "右 / Kanan" },
+  { value: "左", label: "左 / Kiri" },
 ];
 const GOLDAR_OPTIONS = ["A", "B", "AB", "O"].map((v) => ({ value: v, label: v }));
 const AGAMA_OPTIONS = [
@@ -60,13 +66,6 @@ function parsePhone(full: string): { prefix: string; number: string } {
   return { prefix: "+62", number: full };
 }
 
-const DOKUMEN_FIELDS: Array<{ key: keyof DokumenPendukung; label: string }> = [
-  { key: "ktp", label: "KTP" },
-  { key: "kk", label: "Kartu Keluarga (KK)" },
-  { key: "akte_kelahiran", label: "Akte Kelahiran" },
-  { key: "ijazah_terakhir", label: "Ijazah Terakhir" },
-];
-
 const fileInputClass =
   "w-full border rounded-xl px-4 py-3 text-sm text-slate-900 bg-white border-slate-200 " +
   "focus:outline-none focus:ring-2 focus:ring-primary-pink focus:border-transparent transition " +
@@ -82,6 +81,7 @@ export default function StepMetaInfoLpk({
   onFotoFileChange,
   onDokumenFileChange,
   errors = {},
+  hideNim = false,
 }: Props) {
   const setMeta = (key: keyof MetaData, val: string) => onMetaChange({ ...meta, [key]: val });
   const setDokumen = (key: keyof DokumenPendukung, val: string) =>
@@ -134,7 +134,7 @@ export default function StepMetaInfoLpk({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
             id="field-tanggal_pembuatan_cv"
-            label="作成日 / Tanggal Masuk Pelatihan"
+            label="作成日 / Tanggal Pembuatan CV"
             value={meta.tanggal_pembuatan_cv}
             onChange={(v) => setMeta("tanggal_pembuatan_cv", v)}
             type="date"
@@ -204,12 +204,13 @@ export default function StepMetaInfoLpk({
       </section>
 
       <section>
-        <h3 className="text-base font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-          📎 Dokumen Pendukung
+        <h3 className="text-base font-semibold text-slate-800 mb-1 pb-2 border-b border-slate-100">
+          Dokumen Pendukung
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {DOKUMEN_FIELDS.map((field) => (
-            <div key={field.key} className="flex flex-col gap-1.5">
+        <p className="text-xs text-slate-500 mb-4">Semua berkas wajib hasil pindai PDF.</p>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {SUPPORTING_DOCS.map((field) => (
+            <div key={field.cvKey} className="flex flex-col gap-1.5">
               <div className="text-sm font-medium text-slate-700 inline-flex items-center gap-1.5">
                 <span>{field.label}</span>
                 <FileRuleTooltip text={TOOLTIP_DOC_UPLOAD} />
@@ -221,19 +222,19 @@ export default function StepMetaInfoLpk({
                 onChange={(e) => {
                   const file = e.target.files?.[0] ?? null;
                   if (file && !isAllowedDocUpload(file)) {
-                    toast.error("Hanya file PDF, JPG, JPEG, atau PNG yang diperbolehkan.");
+                    toast.error("Dokumen pendukung wajib hasil pindai PDF.");
                     e.target.value = "";
-                    setDokumen(field.key, "");
-                    onDokumenFileChange?.(field.key, null);
+                    setDokumen(field.cvKey, "");
+                    onDokumenFileChange?.(field.cvKey, null);
                     return;
                   }
-                  setDokumen(field.key, file?.name || "");
-                  onDokumenFileChange?.(field.key, file);
+                  setDokumen(field.cvKey, file?.name || "");
+                  onDokumenFileChange?.(field.cvKey, file);
                 }}
                 className={fileInputClass}
               />
               <p className="text-xs text-slate-500">
-                {dokumen[field.key] ? `Terpilih: ${dokumen[field.key]}` : "Belum ada file dipilih"}
+                {dokumen[field.cvKey] ? `Terpilih: ${dokumen[field.cvKey]}` : field.hint}
               </p>
             </div>
           ))}
@@ -243,15 +244,16 @@ export default function StepMetaInfoLpk({
       <section>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 pb-2 border-b border-slate-100 gap-4">
           <h3 className="text-base font-semibold text-slate-800">👤 基本情報 / Informasi Dasar</h3>
+          {hideNim ? null : (
           <div className="w-full sm:w-56" id="field-no_peserta">
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-              NIM / No. Peserta <span className="text-red-500">*</span>
+              ID Peserta <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={info.no_peserta}
               onChange={(e) => setInfo("no_peserta", e.target.value.toUpperCase())}
-              placeholder="FTI-2026-001"
+              placeholder="FTI05001"
               className={`w-full border rounded-xl px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:border-transparent transition ${
                 errors.no_peserta
                   ? "border-red-400 focus:ring-red-400"
@@ -259,6 +261,7 @@ export default function StepMetaInfoLpk({
               }`}
             />
           </div>
+          )}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField
@@ -357,6 +360,21 @@ export default function StepMetaInfoLpk({
             autoUppercase={false}
           />
           <FormField
+            id="field-tempat_lahir"
+            label="出身地 / Tempat Lahir"
+            value={info.tempat_lahir ?? ""}
+            onChange={(v) => setInfo("tempat_lahir", v)}
+            placeholder="Contoh: SUKABUMI"
+            autoUppercase={false}
+          />
+          <FormSelect
+            id="field-tangan_dominan"
+            label="利き手 / Tangan Dominan"
+            value={info.tangan_dominan ?? ""}
+            onChange={(v) => setInfo("tangan_dominan", v)}
+            options={TANGAN_OPTIONS}
+          />
+          <FormField
             id="field-tanggal_lahir"
             label="生年月日 / Tanggal Lahir"
             value={info.tanggal_lahir}
@@ -453,6 +471,30 @@ export default function StepMetaInfoLpk({
             placeholder="nama@email.com"
             required
             error={errors.email}
+          />
+          <FormField
+            id="field-kontak_darurat_nama"
+            label="緊急連絡先 / Kontak Darurat"
+            value={info.kontak_darurat_nama}
+            onChange={(v) => setInfo("kontak_darurat_nama", v)}
+            placeholder="Nama orang yang dihubungi"
+          />
+          <FormField
+            id="field-kontak_darurat_hubungan"
+            label="続柄 / Hubungan"
+            value={info.kontak_darurat_hubungan}
+            onChange={(v) => setInfo("kontak_darurat_hubungan", v)}
+            placeholder="Ibu, Ayah, Kakak"
+            autoUppercase={false}
+          />
+          <FormField
+            id="field-kontak_darurat_telepon"
+            label="緊急電話 / Telepon Darurat"
+            value={info.kontak_darurat_telepon}
+            onChange={(v) => setInfo("kontak_darurat_telepon", v)}
+            type="tel"
+            placeholder="+6281234567890"
+            autoUppercase={false}
           />
           <FormField
             id="field-alamat_lengkap"

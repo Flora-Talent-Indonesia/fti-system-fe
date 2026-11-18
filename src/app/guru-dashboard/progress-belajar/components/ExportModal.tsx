@@ -50,8 +50,6 @@ export default function ExportModal({
     }
   };
 
-  const translateStatus = (s: string) => s === 'Lulus' ? 'Passed' : s === 'Remedial' ? 'Failed' : 'Pending';
-
   const handlePreview = () => {
     if (targetRows.length === 0) {
       alert("Tidak ada data siswa untuk kriteria ini.");
@@ -269,7 +267,7 @@ export default function ExportModal({
               <div className="flex justify-between items-end border-b-2 border-black pb-2 mb-6">
                 <div className="space-y-3">
                   <div className="flex items-end text-sm">
-                    <span className="w-24 font-bold">学生番号<br /><span className="text-[10px] font-normal">Student ID</span></span>
+                    <span className="w-24 font-bold">学生番号<br /><span className="text-[10px] font-normal">ID Peserta</span></span>
                     <span className="text-base font-bold border-b border-black border-dashed min-w-[150px] inline-block px-2">{student.no_peserta}</span>
                   </div>
                   <div className="flex items-end text-sm">
@@ -348,16 +346,14 @@ export default function ExportModal({
                         <tr>
                           <td className="border border-black p-2 font-bold text-left pl-3 bg-gray-50 print:bg-transparent">N5 模擬 <span className="text-[10px] font-normal">(N5 Mock)</span></td>
                           <td className="border border-black p-2 font-semibold">
-                            {student.ujian_n5_score ?? '-'}
-                            <div className="text-[10px] font-normal">({translateStatus(student.ujian_n5)})</div>
+                            {student.ujian_n5 || 'Belum'}
                           </td>
                         </tr>
                         {!n5Only && (
                           <tr>
                             <td className="border border-black p-2 font-bold text-left pl-3 bg-gray-50 print:bg-transparent">N4 模擬 <span className="text-[10px] font-normal">(N4 Mock)</span></td>
                             <td className="border border-black p-2 font-semibold">
-                              {student.ujian_n4_score ?? '-'}
-                              <div className="text-[10px] font-normal">({translateStatus(student.ujian_n4)})</div>
+                              {student.ujian_n4 || 'Belum'}
                             </td>
                           </tr>
                         )}

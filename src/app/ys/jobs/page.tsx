@@ -23,6 +23,7 @@ import {
   type JobSortDir,
   type JobSortField,
 } from "@/lib/job-utils";
+import { omitInactiveAccounts } from "@/lib/fti-student-account-storage";
 import { loadLpkStudents, seedLpkStudentsIfEmpty } from "@/lib/lpk-student-storage";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 import YsViewAssignedModal from "./components/YsViewAssignedModal";
@@ -68,7 +69,7 @@ function refreshJobData() {
   seedLpkStudentsIfEmpty();
   return {
     jobs: loadJobs(),
-    students: loadLpkStudents(),
+    students: omitInactiveAccounts(loadLpkStudents()),
   };
 }
 
@@ -264,7 +265,7 @@ export default function YsJobsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {displayedJobs.map((job, index) => {
-                    const assigned = job.assignedStudentIds.length;
+                    const assigned = job.assignedStudentIds.filter((id) => students.some((student) => student.id === id)).length;
                     const full = job.kuota != null && assigned >= job.kuota;
                     const status = calculateJobStatus(job.deadlineDokumen, job.tanggalMansetsu);
                     const inactiveTab = activeTab === "nonaktif";

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -21,8 +21,12 @@ import StepPendidikan from "@/components/cv-form/components/StepPendidikan";
 import StepPekerjaan from "@/components/cv-form/components/StepPekerjaan";
 import StepSertifikat from "@/components/cv-form/components/StepSertifikat";
 import StepKeluarga from "@/components/cv-form/components/StepKeluarga";
+import StepCatatanCv from "@/components/cv-form/components/StepCatatanCv";
+import { FormSelect } from "@/components/cv-form/components/FormControls";
+import { LPK_PROGRAM_OPTIONS } from "@/lib/placement";
 import CVTemplate from "@/components/cv-form/components/CVTemplate";
 import { createDummyCvDraft } from "@/data/dummy-cv-draft";
+import { nextNoPeserta } from "@/lib/lpk-student-storage";
 import {
   CV_STEP_VALIDATORS,
   validateAllCvSteps,
@@ -33,11 +37,13 @@ import {
   saveDaftarPribadiCv,
 } from "@/lib/daftar-pribadi-storage";
 import { upsertFtiDataSiswaFromCv } from "@/lib/fti-data-siswa-storage";
+import { findMitraIdentityMatch, mitraIdentityWarning } from "@/lib/mitra-identity-match";
 import { exportCVToPDF } from "@/lib/export-cv-pdf";
+import { studentFileName } from "@/lib/student-file-name";
 
 function persistDaftarPribadiCv(data: CVData) {
   saveDaftarPribadiCv(data);
-  upsertFtiDataSiswaFromCv(data);
+  upsertFtiDataSiswaFromCv(data, data.program ? { program: data.program } : undefined);
 }
 
 const STEPS = [
@@ -47,11 +53,12 @@ const STEPS = [
   { id: 4, label: "Pekerjaan", icon: "💼", desc: "Riwayat kerja & magang" },
   { id: 5, label: "Sertifikat", icon: "🏆", desc: "Sertifikat & lisensi" },
   { id: 6, label: "Keluarga", icon: "👨‍👩‍👧", desc: "Susunan keluarga" },
+  { id: 7, label: "Tujuan & Keterangan", icon: "📝", desc: "Tujuan ke Jepang dan catatan" },
+  { id: 8, label: "Program", icon: "📋", desc: "Program yang diikuti" },
 ];
 
 function nextNoPesertaDraft(): string {
-  const year = new Date().getFullYear();
-  return `FTI-${year}-001`;
+  return nextNoPeserta();
 }
 
 export default function DaftarPribadiCvFormPage() {
@@ -68,6 +75,15 @@ export default function DaftarPribadiCvFormPage() {
   const update = <K extends keyof CVData>(key: K, value: CVData[K]) => {
     setData((d) => ({ ...d, [key]: value }));
   };
+
+  const mitraMatch = useMemo(
+    () =>
+      findMitraIdentityMatch(
+        data.informasi_dasar.nama_lengkap,
+        data.informasi_dasar.tanggal_lahir,
+      ),
+    [data.informasi_dasar.nama_lengkap, data.informasi_dasar.tanggal_lahir],
+  );
 
   useEffect(() => {
     const saved = loadDaftarPribadiCv();
@@ -102,8 +118,11 @@ export default function DaftarPribadiCvFormPage() {
 
   const fitScale = Math.min((viewportWidth - 64) / 794, 1);
 
+  const validateProgramStep = (d: CVData): CvFormErrors =>
+    d.program ? {} : { program: "Pilih program: Tokutei Ginou atau Ikusei Shuro." };
+
   const tryGoNext = () => {
-    const validate = CV_STEP_VALIDATORS[step - 1];
+    const validate = CV_STEP_VALIDATORS[step - 1] ?? validateProgramStep;
     const errs = validate(data);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
@@ -126,7 +145,15 @@ export default function DaftarPribadiCvFormPage() {
       toast.error("Masih ada data wajib yang belum lengkap.");
       return;
     }
+    const programErrors = validateProgramStep(data);
+    if (Object.keys(programErrors).length > 0) {
+      setErrors(programErrors);
+      setStep(7);
+      toast.error("Pilih program yang diikuti terlebih dahulu.");
+      return;
+    }
     persistDaftarPribadiCv(data);
+    if (mitraMatch) toast(mitraIdentityWarning(mitraMatch), { icon: "⚠️" });
     setSubmitted(true);
     setIsDataValid(false);
     toast.success("CV berhasil disimpan. Tinjau preview lalu unduh PDF jika perlu.");
@@ -138,6 +165,7 @@ export default function DaftarPribadiCvFormPage() {
       return;
     }
     persistDaftarPribadiCv(data);
+    if (mitraMatch) toast(mitraIdentityWarning(mitraMatch), { icon: "⚠️" });
     toast.success("CV tersimpan.");
   };
 
@@ -175,7 +203,6 @@ export default function DaftarPribadiCvFormPage() {
   }
 
   if (submitted) {
-    const noPeserta = data.informasi_dasar.no_peserta.trim() || "CV";
     return (
       <div className="min-h-screen flex flex-col lg:flex-row bg-[#fdf8fa] font-sans text-matte-black">
         <div className="lg:w-[380px] xl:w-[420px] shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-[#e5e7eb] p-4 md:p-6 flex flex-col gap-4">
@@ -238,7 +265,7 @@ export default function DaftarPribadiCvFormPage() {
             </button>
             <button
               type="button"
-              onClick={() => void exportCVToPDF("cv-print-area", `CV_${noPeserta}`)}
+              onClick={() => void exportCVToPDF("cv-print-area", studentFileName("CV", data.informasi_dasar.nama_lengkap))}
               disabled={!isDataValid}
               className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
                 isDataValid
@@ -353,7 +380,7 @@ export default function DaftarPribadiCvFormPage() {
             </div>
           </div>
 
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <div className="fti-panel p-4 md:p-8 lg:p-12">
               <div className="hidden lg:block mb-10 border-b border-[#e5e7eb] pb-6">
                 <div className="flex items-start justify-between gap-4">
@@ -368,6 +395,16 @@ export default function DaftarPribadiCvFormPage() {
                   {step === 1 ? dummyDataButton : null}
                 </div>
               </div>
+
+              {mitraMatch && (
+                <div className="mb-6 flex items-start gap-3 bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl px-4 py-3 text-sm">
+                  <span className="text-lg leading-none">⚠️</span>
+                  <div>
+                    <p className="font-semibold">Siswa ini berasal dari LPK Mitra</p>
+                    <p className="text-xs mt-0.5">{mitraIdentityWarning(mitraMatch)}</p>
+                  </div>
+                </div>
+              )}
 
               {errorCount > 0 && (
                 <div className="mb-6 flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 rounded-2xl px-4 py-3 text-sm">
@@ -450,6 +487,36 @@ export default function DaftarPribadiCvFormPage() {
                   }}
                   errors={errors}
                 />
+              )}
+              {step === 7 && (
+                <StepCatatanCv
+                  data={data.catatan}
+                  onChange={(v) => {
+                    setErrors({});
+                    update("catatan", v);
+                  }}
+                />
+              )}
+              {step === 8 && (
+                <div className="space-y-4">
+                  <p className="text-sm text-text-gray">
+                    Pilih program yang akan diikuti.
+                  </p>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <FormSelect
+                      label="Program"
+                      value={data.program}
+                      onChange={(v) => {
+                        setErrors({});
+                        update("program", v);
+                      }}
+                      options={[...LPK_PROGRAM_OPTIONS]}
+                      placeholder="Pilih program"
+                      required
+                      error={errors.program}
+                    />
+                  </div>
+                </div>
               )}
 
               <div className="flex items-center justify-between mt-6 md:mt-12 pt-4 md:pt-8 border-t border-[#e5e7eb]">

@@ -7,6 +7,9 @@ const PORTAL_ITEMS = [
   { label: "YS", href: "/ys" },
   { label: "Daftar Siswa", href: "/daftar-pribadi" },
   { label: "Guru", href: "/guru-dashboard" },
+  { label: "Finance Dashboard", href: "/finance" },
+  { label: "Dokumen", href: "/dokumen" },
+  { label: "Account Management", href: "/account-management" },
 ] as const;
 
 export default function HomePage() {

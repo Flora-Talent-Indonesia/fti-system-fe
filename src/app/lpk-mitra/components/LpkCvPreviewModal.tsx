@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Download, X } from "lucide-react";
 import CvPreviewPanel from "@/components/cv-form/components/CvPreviewPanel";
 import { exportCVToPDF } from "@/lib/export-cv-pdf";
+import { studentFileName } from "@/lib/student-file-name";
 import { lpkStudentToCvData } from "@/lib/cv-to-lpk-student";
 import type { LpkStudentRecord } from "@/types/lpk-student";
 
@@ -28,7 +29,7 @@ export default function LpkCvPreviewModal({
   const cvData = lpkStudentToCvData(student);
 
   const handleExport = () => {
-    const fileName = `CV_${student.nama_lengkap.replace(/\s+/g, "_")}_${student.no_peserta}.pdf`;
+    const fileName = studentFileName("CV", student.nama_lengkap);
     void exportCVToPDF(CV_EXPORT_ID, fileName);
   };
 

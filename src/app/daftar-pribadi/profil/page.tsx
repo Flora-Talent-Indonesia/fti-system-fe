@@ -1,17 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Loader2, UserRound } from "lucide-react";
+import { ArrowLeft, Loader2, Pencil, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { CVData } from "@/components/cv-form/types";
+import { toast } from "react-hot-toast";
+import type { CVData, DokumenPendukung } from "@/components/cv-form/types";
 import { defaultCVData } from "@/components/cv-form/defaults";
+import ProfileCvEditor from "@/components/daftar-pribadi/ProfileCvEditor";
 import ProfileCvSections from "@/components/daftar-pribadi/ProfileCvSections";
-import { loadDaftarPribadiCv, mergeCvData } from "@/lib/daftar-pribadi-storage";
+import { loadDaftarPribadiCv, mergeCvData, saveDaftarPribadiCv } from "@/lib/daftar-pribadi-storage";
+import { upsertFtiDataSiswaFromCv } from "@/lib/fti-data-siswa-storage";
+import { missingDocNames, missingRequiredDocsFromCv } from "@/lib/supporting-docs";
 
 export default function DaftarPribadiProfilPage() {
   const [cv, setCv] = useState<CVData | null>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -22,6 +27,25 @@ export default function DaftarPribadiProfilPage() {
 
   const data = cv ?? mergeCvData(defaultCVData);
   const cvNotFound = cv === null;
+
+  const handleSaveCv = (nextDraft: CVData) => {
+    const next = mergeCvData(nextDraft);
+    saveDaftarPribadiCv(next);
+    upsertFtiDataSiswaFromCv(next, next.program ? { program: next.program } : undefined);
+    setCv(next);
+    setEditing(false);
+    toast.success("CV diperbarui");
+  };
+
+  const handleUploadDoc = (key: keyof DokumenPendukung, filename: string) => {
+    const next = mergeCvData({
+      ...data,
+      dokumen: { ...data.dokumen, [key]: filename },
+    });
+    saveDaftarPribadiCv(next);
+    upsertFtiDataSiswaFromCv(next, next.program ? { program: next.program } : undefined);
+    setCv(next);
+  };
 
   if (!mounted || loading) {
     return (
@@ -77,14 +101,41 @@ export default function DaftarPribadiProfilPage() {
           </div>
         ) : null}
 
+        {!cvNotFound && missingRequiredDocsFromCv(data.dokumen).length > 0 ? (
+          <div className="mb-8 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p className="font-semibold">Dokumen pendukung belum diunggah.</p>
+            <p className="mt-1">{missingDocNames(missingRequiredDocsFromCv(data.dokumen))}</p>
+          </div>
+        ) : null}
+
         <div className="fti-panel p-8 md:p-10 min-w-0">
-          <h2 className="font-[family-name:var(--font-montserrat)] text-xl font-bold text-matte-black mb-2 tracking-wide uppercase">
-            Data lengkap CV
-          </h2>
-          <p className="text-xs text-text-gray mb-8 pb-6 border-b border-[#e5e7eb]">
-            Data diambil dari form daftar pribadi yang telah Anda simpan.
-          </p>
-          <ProfileCvSections data={data} />
+          <div className="mb-8 flex flex-col gap-4 border-b border-[#e5e7eb] pb-6 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="font-[family-name:var(--font-montserrat)] text-xl font-bold uppercase tracking-wide text-matte-black">
+                {editing ? "Edit CV" : "Data lengkap CV"}
+              </h2>
+              <p className="mt-2 text-xs text-text-gray">
+                {editing
+                  ? "Ubah data yang tercetak di CV, lalu simpan."
+                  : "Data diambil dari form daftar pribadi yang telah Anda simpan. Perubahan di luar isi CV dilakukan oleh admin atau staf FTI."}
+              </p>
+            </div>
+            {!cvNotFound && !editing ? (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="inline-flex shrink-0 items-center justify-center gap-2 bg-primary-pink px-4 py-2.5 text-xs font-semibold uppercase tracking-widest text-white hover:bg-[var(--primary-pink-hover)]"
+              >
+                <Pencil size={14} />
+                Edit CV
+              </button>
+            ) : null}
+          </div>
+          {editing ? (
+            <ProfileCvEditor data={data} onCancel={() => setEditing(false)} onSave={handleSaveCv} />
+          ) : (
+            <ProfileCvSections data={data} onUploadDoc={cvNotFound ? undefined : handleUploadDoc} />
+          )}
         </div>
       </div>
     </main>

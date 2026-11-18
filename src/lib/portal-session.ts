@@ -14,6 +14,11 @@ export function getActivePortal(): PortalRole | null {
   return null;
 }
 
+export function clearActivePortal() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(STORAGE_KEY);
+}
+
 /** Admin FTI — boleh unduh CV, KTP, KK, MCU, dll. */
 export function isFtiAdmin(): boolean {
   return getActivePortal() === "fti";

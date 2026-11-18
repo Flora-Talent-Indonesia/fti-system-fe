@@ -1,9 +1,16 @@
 'use client';
-import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
-import { FormField, FormSelect } from './FormControls';
+import { useEffect, useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { FormField, FormSelect, YmdFields } from './FormControls';
 import type { RiwayatPendidikan } from '../types';
 import { BULAN_OPTIONS, TAHUN_OPTIONS } from '../defaults';
+import { JURUSAN_OPTIONS, withCurrentOption } from '@/lib/cv-referensi';
+import {
+  PENDIDIKAN_SLOTS,
+  type PendidikanSlotKey,
+  arrangePendidikan,
+  isPendidikanFilled,
+} from '@/lib/cv-slots';
 
 interface Props {
   items: RiwayatPendidikan[];
@@ -11,211 +18,198 @@ interface Props {
   errors?: Record<string, string>;
 }
 
-const TINGKAT_OPTIONS = [
-  { value: 'SD', label: 'SD（小学校）' },
-  { value: 'SMP', label: 'SMP（中学校）' },
-  { value: 'SMA', label: 'SMA（高校）' },
-  { value: 'SMK', label: 'SMK（専門学校）' },
-  { value: 'D3', label: 'D3（3年制大学）' },
-  { value: 'S1', label: 'S1（4年制大学）' },
+const SMA_TINGKAT = [
+  { value: 'SMA', label: '高校 / SMA' },
+  { value: 'SMK', label: '専門高校 / SMK' },
 ];
-const NEEDS_JURUSAN = ['SMA', 'SMK', 'D3', 'S1'];
-
-const SMA_JURUSAN_OPTIONS = [
-  { value: '科学', label: '科学 / IPA' },
-  { value: '社会', label: '社会 / IPS' },
+const UNIV_TINGKAT = [
+  { value: 'D3', label: '大学（3年）/ D3' },
+  { value: 'S1', label: '大学（4年）/ S1' },
 ];
-
-const SMK_JURUSAN_OPTIONS = [
-  { value: '機械工学', label: '機械工学 / Teknik Mesin' },
-  { value: '電気工学', label: '電気工学 / Teknik Elektro' },
-  { value: '航海学', label: '航海学 / Pelayaran' },
-  { value: 'コンピュータネットワーク工学', label: 'コンピュータネットワーク工学 / Teknik Jaringan Komputer' },
-  { value: 'バイク整備', label: 'バイク整備 / Teknik Sepeda Motor' },
-  { value: '自動車整備', label: '自動車整備 / Teknik Kendaraan Ringan' },
-  { value: '宗教学', label: '宗教学 / Agama' },
-  { value: '事務学', label: '事務学 / Administrasi Perkantoran' },
-  { value: '会計学', label: '会計学 / Akuntansi' },
-  { value: '縫製学', label: '縫製学 / Tata Busana' },
-  { value: '建築学', label: '建築学 / Teknik Bangunan' },
-  { value: '薬剤学', label: '薬剤学 / Farmasi' },
-  { value: '看護師', label: '看護師 / Keperawatan' },
-  { value: '宿泊学', label: '宿泊学 / Perhotelan' },
-  { value: '農業学', label: '農業学 / Pertanian' },
-  { value: 'マルチメディア', label: 'マルチメディア / Multimedia' },
-  { value: '調理学', label: '調理学 / Tata Boga' },
+const ALL_TINGKAT = [
+  { value: 'SD', label: '小学校 / SD' },
+  { value: 'SMP', label: '中学校 / SMP' },
+  ...SMA_TINGKAT,
+  ...UNIV_TINGKAT,
 ];
-
-const KULIAH_JURUSAN_OPTIONS = [
-  { value: '情報工学', label: '情報工学 / Teknik Informatika' },
-  { value: '情報システム学', label: '情報システム学 / Sistem Informasi' },
-  { value: '日本文学', label: '日本文学 / Sastra Jepang' },
-  { value: '経営学', label: '経営学 / Manajemen' },
-  { value: '会計学', label: '会計学 / Akuntansi' },
-  { value: '産業工学', label: '産業工学 / Teknik Industri' },
-  { value: '土木工学', label: '土木工学 / Teknik Sipil' },
-  { value: '心理学', label: '心理学 / Psikologi' },
-  { value: 'コミュニケーション学', label: 'コミュニケーション学 / Ilmu Komunikasi' },
-  { value: '法学', label: '法学 / Hukum' },
-  { value: '看護学', label: '看護学 / Keperawatan' },
-  { value: 'ビジュアルコミュニケーションデザイン', label: 'ビジュアルコミュニケーションデザイン / Desain Komunikasi Visual (DKV)' },
-  { value: '電気工学', label: '電気工学 / Teknik Elektro' },
-  { value: '薬学', label: '薬学 / Farmasi' },
-  { value: '国際関係学', label: '国際関係学 / Hubungan Internasional' },
-  { value: '経営管理学', label: '経営管理学 / Administrasi Bisnis' },
-  { value: '英語教育学', label: '英語教育学 / Pendidikan Bahasa Inggris' },
-  { value: '建築学', label: '建築学 / Arsitektur' },
-  { value: '機械工学', label: '機械工学 / Teknik Mesin' },
-  { value: 'データサイエンス', label: 'データサイエンス / Data Science' },
-];
-
-const emptyItem = (): RiwayatPendidikan => ({
-  id: crypto.randomUUID(),
-  tahun_masuk: '', bulan_masuk: '', tahun_lulus: '', bulan_lulus: '',
-  nama_sekolah: '', tingkat_pendidikan: '', jurusan: '',
-});
 
 export default function StepPendidikan({ items, onChange, errors = {} }: Props) {
-  const [manualJurusanMap, setManualJurusanMap] = useState<Record<string, boolean>>({});
+  const { slots, overflow } = arrangePendidikan(items);
+  const [opened, setOpened] = useState<PendidikanSlotKey[]>([]);
 
-  const add = () => onChange([...items, emptyItem()]);
-  const remove = (id: string) => onChange(items.filter((i) => i.id !== id));
-  const update = (id: string, key: keyof RiwayatPendidikan, val: string) =>
-    onChange(items.map((i) => (i.id === id ? { ...i, [key]: val } : i)));
+  useEffect(() => {
+    const { slots: next } = arrangePendidikan(items);
+    setOpened((prev) => prev.filter((key) => {
+      const index = PENDIDIKAN_SLOTS.findIndex((slot) => slot.key === key);
+      return index >= 0 && !isPendidikanFilled(next[index]);
+    }));
+  }, [items]);
 
-  const isUnlisted = (tingkat: string, jur: string) => {
-    if (!jur) return false;
-    if (tingkat === 'SMA') return !SMA_JURUSAN_OPTIONS.some(o => o.value === jur);
-    if (tingkat === 'SMK') return !SMK_JURUSAN_OPTIONS.some(o => o.value === jur);
-    if (tingkat === 'D3' || tingkat === 'S1') return !KULIAH_JURUSAN_OPTIONS.some(o => o.value === jur);
-    return false;
+  const commit = (nextSlots: RiwayatPendidikan[], nextOverflow: RiwayatPendidikan[]) => {
+    onChange([...nextSlots, ...nextOverflow].filter(isPendidikanFilled));
   };
+
+  const patchSlot = (index: number, patch: Partial<RiwayatPendidikan>) => {
+    const next = slots.map((item, i) => (i === index ? { ...item, ...patch } : item));
+    commit(next, overflow);
+  };
+
+  const removeSlot = (key: PendidikanSlotKey, item: RiwayatPendidikan) => {
+    setOpened((prev) => prev.filter((open) => open !== key));
+    onChange(items.filter((row) => row.id !== item.id));
+  };
+
+  const visible = slots
+    .map((item, index) => ({ item, index, slot: PENDIDIKAN_SLOTS[index] }))
+    .filter(({ item, slot }) => isPendidikanFilled(item) || opened.includes(slot.key));
+  const hidden = PENDIDIKAN_SLOTS.filter((slot, index) => !isPendidikanFilled(slots[index]) && !opened.includes(slot.key));
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">学歴を最も古いものから追加してください。</p>
-        <button onClick={add} className="flex items-center gap-2 px-4 py-2 bg-primary-pink text-white text-sm font-medium rounded-xl hover:bg-[var(--primary-pink-hover)] transition">
-          <Plus size={16} /> Tambah
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-500">
+          Isi jenjang yang dilalui. Jenjang yang tidak dicantumkan bisa dihapus, sama seperti sertifikat.
+        </p>
+        {hidden.length > 0 && (
+          <select
+            aria-label="Tambah jenjang"
+            value=""
+            onChange={(event) => {
+              const key = event.target.value as PendidikanSlotKey;
+              if (!key) return;
+              setOpened((prev) => (prev.includes(key) ? prev : [...prev, key]));
+            }}
+            className="border border-slate-200 bg-white rounded-xl px-4 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-pink"
+          >
+            <option value="">Tambah jenjang</option>
+            {hidden.map((slot) => (
+              <option key={slot.key} value={slot.key}>{slot.heading}</option>
+            ))}
+          </select>
+        )}
       </div>
-      {items.length === 0 && (
-        <div
-          id="field-pendidikan-empty"
-          className="text-center py-12 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl"
-        >
-          学歴データなし / Belum ada data pendidikan
+      {errors['pendidikan-empty'] && (
+        <p className="text-sm text-red-600">{errors['pendidikan-empty']}</p>
+      )}
+      {visible.length === 0 && overflow.length === 0 && (
+        <div className="text-center py-12 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl">
+          Belum ada riwayat pendidikan
         </div>
       )}
-      {items.map((item, idx) => (
-        <div key={item.id} id={`pendidikan-${item.id}`} className="border border-slate-200 rounded-2xl p-5 bg-slate-50 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-primary-pink">学歴 #{idx + 1}</span>
-            <button onClick={() => remove(item.id)} className="text-red-400 hover:text-red-600 transition"><Trash2 size={16} /></button>
+      {visible.map(({ item, index, slot }) => {
+        const filled = isPendidikanFilled(item);
+        const tingkatOptions = slot.key === 'sma' ? SMA_TINGKAT : slot.key === 'univ' ? UNIV_TINGKAT : [];
+        return (
+          <div key={slot.key} id={`pendidikan-${item.id}`} className="border border-slate-200 rounded-2xl p-5 bg-slate-50 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-primary-pink">{slot.heading}</span>
+              <button type="button" onClick={() => removeSlot(slot.key, item)} className="text-red-400 hover:text-red-600 transition" aria-label={`Hapus ${slot.heading}`}>
+                <Trash2 size={16} />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {tingkatOptions.length > 0 && (
+                <FormSelect
+                  id={`field-pendidikan-tingkat-${item.id}`}
+                  label="学歴 / Jenjang"
+                  value={item.tingkat_pendidikan}
+                  onChange={(v) => patchSlot(index, { tingkat_pendidikan: v })}
+                  options={tingkatOptions}
+                  required={filled}
+                  error={errors[`pendidikan-${item.id}-tingkat_pendidikan`]}
+                />
+              )}
+              <FormField
+                id={`field-pendidikan-nama-${item.id}`}
+                label="学校名 / Nama Sekolah"
+                value={item.nama_sekolah}
+                onChange={(v) => patchSlot(index, { nama_sekolah: v })}
+                placeholder="Contoh: SMAN 1 Bandung"
+                required={filled}
+                className={tingkatOptions.length === 0 ? 'sm:col-span-2' : ''}
+                error={errors[`pendidikan-${item.id}-nama_sekolah`]}
+              />
+              {slot.needsJurusan && (
+                <FormSelect
+                  id={`field-pendidikan-jurusan-${item.id}`}
+                  label="専攻 / Jurusan"
+                  value={item.jurusan}
+                  onChange={(v) => patchSlot(index, { jurusan: v })}
+                  options={withCurrentOption(JURUSAN_OPTIONS, item.jurusan)}
+                  required={filled}
+                  className="sm:col-span-2"
+                  error={errors[`pendidikan-${item.id}-jurusan`]}
+                />
+              )}
+              <YmdFields
+                idPrefix={`field-pendidikan-masuk-${item.id}`}
+                label="入学 / Masuk"
+                year={item.tahun_masuk}
+                month={item.bulan_masuk}
+                onYear={(v) => patchSlot(index, { tahun_masuk: v })}
+                onMonth={(v) => patchSlot(index, { bulan_masuk: v })}
+                yearOptions={TAHUN_OPTIONS}
+                monthOptions={BULAN_OPTIONS}
+                yearError={errors[`pendidikan-${item.id}-tahun_masuk`]}
+                monthError={errors[`pendidikan-${item.id}-bulan_masuk`]}
+              />
+              <YmdFields
+                idPrefix={`field-pendidikan-lulus-${item.id}`}
+                label="卒業 / Lulus"
+                year={item.tahun_lulus}
+                month={item.bulan_lulus}
+                onYear={(v) => patchSlot(index, { tahun_lulus: v })}
+                onMonth={(v) => patchSlot(index, { bulan_lulus: v })}
+                yearOptions={TAHUN_OPTIONS}
+                monthOptions={BULAN_OPTIONS}
+                yearError={errors[`pendidikan-${item.id}-tahun_lulus`]}
+                monthError={errors[`pendidikan-${item.id}-bulan_lulus`]}
+              />
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField
-              id={`field-pendidikan-nama-${item.id}`}
-              label="学校名 / Nama Sekolah / Universitas"
-              value={item.nama_sekolah}
-              onChange={(v) => update(item.id, 'nama_sekolah', v)}
-              placeholder="Contoh: SMAN 1 Bandung"
-              required
-              error={errors[`pendidikan-${item.id}-nama_sekolah`]}
-            />
-            <FormSelect
-              id={`field-pendidikan-tingkat-${item.id}`}
-              label="学歴レベル / Tingkat Pendidikan"
-              value={item.tingkat_pendidikan}
-              onChange={(v) => {
-                const newItems = items.map((i) =>
-                  i.id === item.id ? { ...i, tingkat_pendidikan: v, jurusan: '' } : i
-                );
-                onChange(newItems);
-                setManualJurusanMap((prev) => ({ ...prev, [item.id]: false }));
-              }}
-              options={TINGKAT_OPTIONS}
-              required
-              error={errors[`pendidikan-${item.id}-tingkat_pendidikan`]}
-            />
-            {(() => {
-              if (!NEEDS_JURUSAN.includes(item.tingkat_pendidikan)) return null;
-
-              const isSMA = item.tingkat_pendidikan === 'SMA';
-              const isSMK = item.tingkat_pendidikan === 'SMK';
-              
-              const options = isSMA ? SMA_JURUSAN_OPTIONS : (isSMK ? SMK_JURUSAN_OPTIONS : KULIAH_JURUSAN_OPTIONS);
-              const selectOptions = [...options, { value: 'Other', label: 'Lainnya (Isi Manual)' }];
-              const isCustom = manualJurusanMap[item.id] || isUnlisted(item.tingkat_pendidikan, item.jurusan);
-
-              return (
-                <>
-                  <FormSelect
-                    id={`field-pendidikan-jurusan-select-${item.id}`}
-                    label="専攻 / Jurusan"
-                    value={isCustom ? 'Other' : item.jurusan}
-                    onChange={(v) => {
-                      if (v === 'Other') {
-                        setManualJurusanMap(prev => ({ ...prev, [item.id]: true }));
-                        update(item.id, 'jurusan', '');
-                      } else {
-                        setManualJurusanMap(prev => ({ ...prev, [item.id]: false }));
-                        update(item.id, 'jurusan', v);
-                      }
-                    }}
-                    options={selectOptions}
-                    required={!isCustom}
-                    error={!isCustom ? errors[`pendidikan-${item.id}-jurusan`] : undefined}
-                  />
-                  {isCustom && (
-                    <FormField
-                      id={`field-pendidikan-jurusan-${item.id}`}
-                      label="Jurusan (Manual)"
-                      value={item.jurusan}
-                      onChange={(v) => update(item.id, 'jurusan', v)}
-                      placeholder="Ketik jurusan anda..."
-                      required
-                      error={errors[`pendidikan-${item.id}-jurusan`]}
-                    />
-                  )}
-                </>
-              );
-            })()}
-            <FormSelect
-              id={`field-pendidikan-bulan_masuk-${item.id}`}
-              label="入学月 / Bulan Masuk"
-              value={item.bulan_masuk}
-              onChange={(v) => update(item.id, 'bulan_masuk', v)}
-              options={BULAN_OPTIONS}
-              error={errors[`pendidikan-${item.id}-bulan_masuk`]}
-            />
-            <FormSelect
-              id={`field-pendidikan-tahun_masuk-${item.id}`}
-              label="入学年 / Tahun Masuk"
-              value={item.tahun_masuk}
-              onChange={(v) => update(item.id, 'tahun_masuk', v)}
-              options={TAHUN_OPTIONS}
-              error={errors[`pendidikan-${item.id}-tahun_masuk`]}
-            />
-            <FormSelect
-              id={`field-pendidikan-bulan_lulus-${item.id}`}
-              label="卒業月 / Bulan Lulus"
-              value={item.bulan_lulus}
-              onChange={(v) => update(item.id, 'bulan_lulus', v)}
-              options={BULAN_OPTIONS}
-              error={errors[`pendidikan-${item.id}-bulan_lulus`]}
-            />
-            <FormSelect
-              id={`field-pendidikan-tahun_lulus-${item.id}`}
-              label="卒業年 / Tahun Lulus"
-              value={item.tahun_lulus}
-              onChange={(v) => update(item.id, 'tahun_lulus', v)}
-              options={TAHUN_OPTIONS}
-              error={errors[`pendidikan-${item.id}-tahun_lulus`]}
-            />
-          </div>
+        );
+      })}
+      {overflow.length > 0 && (
+        <div className="space-y-4">
+          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            Riwayat di luar empat jenjang tidak dicetak di CV. Pindahkan ke slot yang sesuai, atau hapus.
+          </p>
+          {overflow.map((item, idx) => (
+            <div key={item.id || idx} className="border border-amber-200 rounded-2xl p-5 bg-amber-50/40 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-amber-900">Di luar slot #{idx + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => onChange(items.filter((row) => row.id !== item.id))}
+                  className="text-red-400 hover:text-red-600 transition"
+                  aria-label="Hapus riwayat di luar slot"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormSelect
+                  label="Jenjang"
+                  value={item.tingkat_pendidikan}
+                  onChange={(v) => {
+                    const next = overflow.map((row) => (row.id === item.id ? { ...row, tingkat_pendidikan: v } : row));
+                    commit(slots, next);
+                  }}
+                  options={ALL_TINGKAT}
+                />
+                <FormField
+                  label="Nama Sekolah"
+                  value={item.nama_sekolah}
+                  onChange={(v) => {
+                    const next = overflow.map((row) => (row.id === item.id ? { ...row, nama_sekolah: v } : row));
+                    commit(slots, next);
+                  }}
+                />
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

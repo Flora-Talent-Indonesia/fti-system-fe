@@ -1,8 +1,9 @@
 import type { LpkMitraAccount } from "@/types/lpk-account";
+import { lpkOrderOf, lpkPublicId, lpkRouteId } from "@/lib/participant-id";
 
 const STORAGE_KEY = "flora_lpk_mitra_accounts_v1";
 const SEED_FLAG = "flora_lpk_mitra_accounts_seeded_v1";
-const SEED_VERSION = "1";
+const SEED_VERSION = "2";
 const ADMIN_LABEL = "Admin FTI";
 
 function nowIso() {
@@ -24,14 +25,18 @@ export { formatDisplayDate as formatLpkAccountDate };
 
 export function getInitialLpkAccounts(): LpkMitraAccount[] {
   const base = nowIso();
-  const seeds: Array<{ id: string; name: string; userName: string; kota: string }> = [
-    { id: "lpk-001", name: "LPK Mitra Sukabumi", userName: "LPK-SUKABUMI", kota: "Sukabumi" },
-    { id: "lpk-002", name: "LPK Mitra Bandung", userName: "LPK-BANDUNG", kota: "Bandung" },
-    { id: "lpk-003", name: "LPK Mitra Semarang", userName: "LPK-SEMARANG", kota: "Semarang" },
+  const seeds: Array<{ order: number; name: string; userName: string; kota: string }> = [
+    { order: 1, name: "LPK Mitra Sukabumi", userName: "LPK-SUKABUMI", kota: "Sukabumi" },
+    { order: 2, name: "LPK Mitra Bandung", userName: "LPK-BANDUNG", kota: "Bandung" },
+    { order: 3, name: "LPK Mitra Semarang", userName: "LPK-SEMARANG", kota: "Semarang" },
   ];
 
   return seeds.map((s) => ({
-    ...s,
+    id: lpkRouteId(s.order),
+    code: lpkPublicId(s.order),
+    name: s.name,
+    userName: s.userName,
+    kota: s.kota,
     password: "lpk123",
     isActive: true,
     createdAt: base,
@@ -71,8 +76,13 @@ export function seedLpkAccountsIfEmpty(): LpkMitraAccount[] {
   return seeded;
 }
 
+export function nextLpkOrder(accounts: Array<{ id: string; code?: string }> = loadLpkAccounts()): number {
+  const used = accounts.map((account) => lpkOrderOf(account.id, account.code));
+  return (used.length ? Math.max(...used) : 0) + 1;
+}
+
 export function nextLpkAccountId(): string {
-  return `lpk-${Date.now().toString(36)}`;
+  return lpkRouteId(nextLpkOrder());
 }
 
 export function createLpkAccount(input: {
@@ -80,16 +90,28 @@ export function createLpkAccount(input: {
   userName: string;
   kota: string;
   password: string;
+  contactName?: string;
+  contactPhone?: string;
+  mouStart?: string;
+  mouEnd?: string;
+  mouFileName?: string;
 }): LpkMitraAccount[] {
   const list = loadLpkAccounts();
   const ts = nowIso();
+  const order = nextLpkOrder(list);
   const account: LpkMitraAccount = {
-    id: nextLpkAccountId(),
+    id: lpkRouteId(order),
+    code: lpkPublicId(order),
     name: input.name.trim().toUpperCase(),
     userName: input.userName.trim().toUpperCase(),
     kota: input.kota.trim(),
     password: input.password,
     isActive: true,
+    contactName: input.contactName?.trim() ?? "",
+    contactPhone: input.contactPhone?.trim() ?? "",
+    mouStart: input.mouStart ?? "",
+    mouEnd: input.mouEnd ?? "",
+    mouFileName: input.mouFileName?.trim() ?? "",
     createdAt: ts,
     updatedAt: ts,
     createdBy: ADMIN_LABEL,
@@ -102,7 +124,7 @@ export function createLpkAccount(input: {
 
 export function updateLpkAccount(
   id: string,
-  patch: Partial<Pick<LpkMitraAccount, "name" | "userName" | "kota" | "password" | "isActive">>
+  patch: Partial<Pick<LpkMitraAccount, "name" | "userName" | "kota" | "password" | "isActive" | "contactName" | "contactPhone" | "mouStart" | "mouEnd" | "mouFileName">>
 ): LpkMitraAccount[] {
   const list = loadLpkAccounts();
   const idx = list.findIndex((a) => a.id === id);
@@ -115,6 +137,29 @@ export function updateLpkAccount(
   };
   saveLpkAccounts(list);
   return list;
+}
+
+export function findLpkByUsername(userName: string): LpkMitraAccount | undefined {
+  const key = userName.trim().toUpperCase();
+  return loadLpkAccounts().find((account) => account.userName.toUpperCase() === key);
+}
+
+export function isMouExpired(account: Pick<LpkMitraAccount, "mouEnd">, today = new Date()): boolean {
+  if (!account.mouEnd) return false;
+  const end = new Date(`${account.mouEnd}T23:59:59`);
+  return !Number.isNaN(end.getTime()) && end.getTime() < today.getTime();
+}
+
+export function mouDaysLeft(account: Pick<LpkMitraAccount, "mouEnd">, today = new Date()): number | null {
+  if (!account.mouEnd) return null;
+  const end = new Date(`${account.mouEnd}T00:00:00`);
+  if (Number.isNaN(end.getTime())) return null;
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.ceil((end.getTime() - start.getTime()) / 86400000);
+}
+
+export function lpkCanLogin(account: LpkMitraAccount): boolean {
+  return account.isActive && !isMouExpired(account);
 }
 
 export function deleteLpkAccountPermanent(id: string): LpkMitraAccount[] {

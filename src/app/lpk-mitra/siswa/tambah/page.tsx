@@ -13,10 +13,15 @@ import StepPendidikan from "@/components/cv-form/components/StepPendidikan";
 import StepPekerjaan from "@/components/cv-form/components/StepPekerjaan";
 import StepSertifikat from "@/components/cv-form/components/StepSertifikat";
 import StepKeluarga from "@/components/cv-form/components/StepKeluarga";
+import StepCatatanCv from "@/components/cv-form/components/StepCatatanCv";
 import CvPreviewPanel from "@/components/cv-form/components/CvPreviewPanel";
-import { FormField } from "@/components/cv-form/components/FormControls";
+import LpkProgramFields from "@/components/lpk/LpkProgramFields";
 import { cvDataToLpkStudent } from "@/lib/cv-to-lpk-student";
-import { upsertLpkStudent, nextNoPeserta } from "@/lib/lpk-student-storage";
+import { loadLpkStudents, upsertLpkStudent } from "@/lib/lpk-student-storage";
+import { seedLpkAccountsIfEmpty } from "@/lib/lpk-account-storage";
+import { nextMitraStudentId } from "@/lib/participant-id";
+import { validateSertifikatRows } from "@/lib/cv-form-validation";
+import { isKeluargaFilled } from "@/lib/cv-slots";
 import { createDummyCvDraft } from "@/data/dummy-cv-draft";
 
 const STEPS = [
@@ -26,6 +31,8 @@ const STEPS = [
   { id: 4, label: "Pekerjaan", icon: "💼", desc: "Riwayat kerja & magang" },
   { id: 5, label: "Sertifikat", icon: "🏆", desc: "Sertifikat & lisensi" },
   { id: 6, label: "Keluarga", icon: "👨‍👩‍👧", desc: "Susunan keluarga" },
+  { id: 7, label: "Tujuan & Keterangan", icon: "📝", desc: "Tujuan ke Jepang dan catatan" },
+  { id: 8, label: "Program", icon: "📋", desc: "Program & job" },
 ];
 
 export default function TambahSiswaPage() {
@@ -36,12 +43,12 @@ export default function TambahSiswaPage() {
     ...defaultCVData,
     informasi_dasar: {
       ...defaultCVData.informasi_dasar,
-      no_peserta: nextNoPeserta(),
+      no_peserta: "",
     },
   }));
   const [asal, setAsal] = useState("");
-  const [jenisProgram, setJenisProgram] = useState("");
-
+  const [job, setJob] = useState("");
+  const [program, setProgram] = useState("");
   const update = <K extends keyof CVData>(key: K, value: CVData[K]) => {
     setData((d) => ({ ...d, [key]: value }));
   };
@@ -54,8 +61,20 @@ export default function TambahSiswaPage() {
         return false;
       }
     }
-    if (s === 6 && data.keluarga.length === 0) {
+    if (s === 5) {
+      const certErrors = validateSertifikatRows(data.sertifikat);
+      if (Object.keys(certErrors).length > 0) {
+        setErrors(certErrors);
+        toast.error("Setiap sertifikat yang diisi wajib dilampiri file PDF.");
+        return false;
+      }
+    }
+    if (s === 6 && !data.keluarga.some(isKeluargaFilled)) {
       toast.error("Tambahkan minimal satu anggota keluarga.");
+      return false;
+    }
+    if (s === 8 && !program) {
+      toast.error("Pilih program: Tokutei Ginou atau Ikusei Shuro.");
       return false;
     }
     return true;
@@ -64,27 +83,35 @@ export default function TambahSiswaPage() {
   const tryGoNext = () => {
     if (!validateStep(step)) return;
     setErrors({});
-    if (step < 6) setStep(step + 1);
+    if (step < STEPS.length) setStep(step + 1);
     else handleSubmit();
   };
 
   const handleSubmit = () => {
-    if (!validateStep(6)) return;
+    if (!validateStep(5) || !validateStep(6) || !validateStep(8)) return;
     const record = cvDataToLpkStudent(data, {
       asalLpk: "LPK Mitra Sukabumi",
       asal,
-      jenisPekerjaan: jenisProgram,
+      jenisPekerjaan: job.trim(),
     });
+    record.program = program;
+    record.tanggal_masuk_pelatihan = "";
+    record.tanggal_kelulusan = "";
+    record.perkiraan_masuk_jepang = "";
+    record.tanggal_keberangkatan = "";
+    const portal = seedLpkAccountsIfEmpty().find((item) => item.id === "lpk-01");
+    record.no_peserta = nextMitraStudentId(portal?.code || "MFTI01", loadLpkStudents().map((student) => student.no_peserta));
     upsertLpkStudent(record);
     toast.success(`Siswa ${record.nama_lengkap} berhasil ditambahkan.`);
     router.push("/lpk-mitra/siswa");
   };
 
   const loadDummyData = () => {
-    const draft = createDummyCvDraft(nextNoPeserta());
+    const draft = createDummyCvDraft("");
     setData(draft);
     setAsal("Sukabumi");
-    setJenisProgram("Magang Manufaktur");
+    setProgram("tg");
+    setJob("PM - Gunma");
     setStep(1);
     setErrors({});
     toast.success("Data contoh dimuat — Rina Wulandari");
@@ -179,7 +206,7 @@ export default function TambahSiswaPage() {
           </button>
         </div>
 
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="bg-white border border-gray-200/60 p-4 md:p-8 lg:p-12 shadow-sm">
             <div className="hidden lg:block mb-10 border-b border-gray-100 pb-6">
               <h2 className="text-3xl font-serif text-gray-900 mb-2">
@@ -221,6 +248,7 @@ export default function TambahSiswaPage() {
                     update("informasi_dasar", v);
                   }}
                   errors={errors}
+                  hideNim
                 />
                 <div className="mt-6 pt-4 border-t border-slate-100 space-y-4">
                   <div>
@@ -234,13 +262,6 @@ export default function TambahSiswaPage() {
                       placeholder="Contoh: Sukabumi"
                     />
                   </div>
-                  <FormField
-                    label="Program Magang LPK"
-                    value={jenisProgram}
-                    onChange={setJenisProgram}
-                    placeholder="Contoh: Magang PM, Magang Manufaktur"
-                    hint="Ketik program magang yang diikuti siswa di LPK"
-                  />
                 </div>
               </>
             )}
@@ -294,6 +315,24 @@ export default function TambahSiswaPage() {
                 errors={errors}
               />
             )}
+            {step === 7 && (
+              <StepCatatanCv
+                data={data.catatan}
+                onChange={(v) => {
+                  setErrors({});
+                  update("catatan", v);
+                }}
+              />
+            )}
+            {step === 8 && (
+              <LpkProgramFields
+                program={program}
+                onProgram={setProgram}
+                job={job}
+                onJob={setJob}
+                asalLpk="LPK Mitra Sukabumi"
+              />
+            )}
 
             <div className="flex items-center justify-between mt-6 md:mt-12 pt-4 md:pt-8 border-t border-gray-200/60">
               <button
@@ -310,7 +349,7 @@ export default function TambahSiswaPage() {
               <span className="text-[10px] tracking-[0.2em] uppercase text-gray-400 hidden sm:block">
                 Langkah {step} / {STEPS.length}
               </span>
-              {step < 6 ? (
+              {step < STEPS.length ? (
                 <button
                   type="button"
                   onClick={tryGoNext}

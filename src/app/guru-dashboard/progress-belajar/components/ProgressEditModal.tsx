@@ -4,18 +4,24 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronDown } from 'lucide-react';
 import LoadingOverlay from '@/components/LoadingOverlay';
-import { ProgressRow, AspectKey, aspectsConfig, NilaiSaveScope } from '../data';
+import { ProgressRow, AspectKey, AspectScores, aspectsConfig, examStatus, EXAM_STATUSES, NilaiSaveScope, sikapProgress, SikapPeriod, SIKAP_PERIODS } from '../data';
 import { toast } from 'react-hot-toast';
 
 export default function ProgressEditModal({
   draft,
   activeAspect: initialAspect,
+  aspectOptions,
+  sikapPeriod = "01",
+  onSikapPeriodChange,
   onClose,
   onSave,
   onFieldChange,
 }: {
   draft: ProgressRow | null;
   activeAspect: AspectKey;
+  aspectOptions?: AspectKey[];
+  sikapPeriod?: SikapPeriod;
+  onSikapPeriodChange?: (period: SikapPeriod) => void;
   onClose: () => void;
   onSave: (dirtyScopes: NilaiSaveScope[]) => Promise<void>;
   onFieldChange: (field: string, value: any, aspect?: AspectKey) => void;
@@ -34,10 +40,8 @@ export default function ProgressEditModal({
   };
 
   const handleFieldChange = (field: string, value: any, aspect?: AspectKey) => {
-    if (field === 'ujian_masuk' || field === 'ujian_n5_score' || field === 'ujian_n4_score' || field === 'keterangan') {
+    if (field === 'ujian_n5' || field === 'ujian_n4' || field === 'keterangan') {
       markDirty('exams');
-    } else if (aspect === 'kepribadian') {
-      markDirty('kepribadian');
     } else if (aspect) {
       markDirty(aspect);
     }
@@ -66,7 +70,14 @@ export default function ProgressEditModal({
   if (!mounted || !draft) return null;
 
   const currentConfig = aspectsConfig[localAspect];
-  const aspectScores = draft[localAspect];
+  const aspectChoices = aspectOptions ?? (Object.keys(aspectsConfig) as AspectKey[]);
+  const aspectScores: AspectScores = localAspect === "sikap"
+    ? (draft.sikap?.[sikapPeriod] ?? {})
+    : draft[localAspect];
+  const progressPercentage = localAspect === "sikap"
+    ? sikapProgress(draft.sikap?.[sikapPeriod] ?? {}, currentConfig.columns)
+    : Number(draft.progress_percentages?.[localAspect] || 0);
+  const sikapMonth = SIKAP_PERIODS.find((period) => period.id === sikapPeriod)?.label ?? "Januari";
 
   return createPortal(
     <div className="fixed inset-0 z-[120] bg-black/45 flex items-center justify-center p-4">
@@ -88,23 +99,46 @@ export default function ProgressEditModal({
           <section>
             <h3 className="text-xs tracking-widest uppercase text-gray-500 mb-4">Informasi Umum</h3>
             <div className="grid md:grid-cols-2 gap-4">
-              <Input label="No Peserta" value={draft.no_peserta} onChange={(v) => handleFieldChange('no_peserta', v)} readOnly />
+              <Input label="ID Peserta" value={draft.no_peserta} onChange={(v) => handleFieldChange('no_peserta', v)} readOnly />
               <Input label="Nama Lengkap" value={draft.nama_lengkap} onChange={(v) => handleFieldChange('nama_lengkap', v)} readOnly />
             </div>
           </section>
 
           <section>
             <h3 className="text-xs tracking-widest uppercase text-gray-500 mb-4">Nilai Ujian Utama</h3>
-            <div className="grid md:grid-cols-3 gap-4 mb-6">
-              <Input label="Ujian Masuk" value={String(draft.ujian_masuk) === '-' ? '' : String(draft.ujian_masuk)} onChange={(v) => handleFieldChange('ujian_masuk', v)} placeholder='Kosongkan jika belum ada' type="number" />
-              <Input label="Ujian N5" value={String(draft.ujian_n5_score) === '-' ? '' : String(draft.ujian_n5_score)} onChange={(v) => handleFieldChange('ujian_n5_score', v)} placeholder='Kosongkan jika belum ada' type="number" />
-              <Input label="Ujian N4" value={String(draft.ujian_n4_score) === '-' ? '' : String(draft.ujian_n4_score)} onChange={(v) => handleFieldChange('ujian_n4_score', v)} placeholder='Kosongkan jika belum ada' type="number" />
+            <div className="grid md:grid-cols-2 gap-4 mb-6">
+              <label className="block">
+                <span className="text-xs font-semibold tracking-wide text-gray-600 uppercase">Ujian N5</span>
+                <select
+                  aria-label="Ujian N5"
+                  value={examStatus(draft.ujian_n5)}
+                  onChange={(event) => handleFieldChange('ujian_n5', event.target.value)}
+                  className="mt-2 w-full cursor-pointer border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#fc809f]/50"
+                >
+                  {EXAM_STATUSES.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold tracking-wide text-gray-600 uppercase">Ujian N4</span>
+                <select
+                  aria-label="Ujian N4"
+                  value={examStatus(draft.ujian_n4)}
+                  onChange={(event) => handleFieldChange('ujian_n4', event.target.value)}
+                  className="mt-2 w-full cursor-pointer border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#fc809f]/50"
+                >
+                  {EXAM_STATUSES.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <div className="block w-full bg-gray-50 p-4 rounded-lg border border-gray-100 mb-6">
               <span className="text-xs font-semibold tracking-wide text-gray-600 uppercase">Progress (%)</span>
               <div className="mt-4">
-                <ProgressBar percentage={Number(draft.progress_percentages?.[localAspect] || 0)} />
+                <ProgressBar percentage={progressPercentage} />
               </div>
             </div>
 
@@ -133,7 +167,7 @@ export default function ProgressEditModal({
                     onChange={(e) => setLocalAspect(e.target.value as AspectKey)}
                     className="w-full appearance-none bg-white border border-gray-300 text-gray-800 py-2.5 pl-4 pr-10 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#fc809f] focus:border-transparent rounded-lg shadow-sm transition-colors cursor-pointer uppercase tracking-wider"
                   >
-                    {(Object.keys(aspectsConfig) as AspectKey[]).map(key => (
+                    {aspectChoices.map(key => (
                       <option key={key} value={key}>
                         {aspectsConfig[key].label}
                       </option>
@@ -143,6 +177,27 @@ export default function ProgressEditModal({
                     <ChevronDown size={18} strokeWidth={2} />
                   </div>
                 </div>
+                {localAspect === "sikap" ? (
+                  <label htmlFor="sikap-month-select" className="mt-4 block">
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-600">Bulan</span>
+                    <div className="relative">
+                      <select
+                        id="sikap-month-select"
+                        aria-label="Bulan"
+                        value={sikapPeriod}
+                        onChange={(event) => onSikapPeriodChange?.(event.target.value as SikapPeriod)}
+                        className="w-full cursor-pointer appearance-none rounded-lg border border-gray-300 bg-white py-2.5 pl-4 pr-10 text-sm font-semibold uppercase tracking-wider text-gray-800 shadow-sm transition-colors focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#fc809f]"
+                      >
+                        {SIKAP_PERIODS.map((period) => (
+                          <option key={period.id} value={period.id}>{period.label}</option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center border-l border-gray-200 px-4 text-gray-500">
+                        <ChevronDown size={18} strokeWidth={2} />
+                      </div>
+                    </div>
+                  </label>
+                ) : null}
               </div>
 
               <div className="p-6 h-[400px] overflow-y-auto custom-scrollbar">
@@ -154,19 +209,15 @@ export default function ProgressEditModal({
                     onChange={(v) => {
                       const newKeterangans = { ...(draft.keterangans || {}) };
                       newKeterangans[localAspect] = v;
-                      if (localAspect === 'kepribadian') {
-                        handleFieldChange('keterangans', newKeterangans, 'kepribadian');
-                      } else {
-                        markDirty(localAspect as NilaiSaveScope);
-                        onFieldChange('keterangans', newKeterangans);
-                      }
+                      markDirty(localAspect === 'sikap' ? 'sikap' : localAspect);
+                      onFieldChange('keterangans', newKeterangans);
                     }}
                   />
                 </div>
 
-                {localAspect === 'kepribadian' ? (
+                {localAspect === 'sikap' ? (
                   <>
-                    <h4 className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-4 pb-2 border-b border-gray-100">Evaluasi Sikap & Perilaku (Sikap Siswa)</h4>
+                    <h4 className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-4 pb-2 border-b border-gray-100">Evaluasi Sikap & Perilaku · {sikapMonth}</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {currentConfig.columns.map((col) => (
                         <div key={col.key} className="bg-gray-50/50 p-4 border border-gray-200/80 rounded-xl flex flex-col justify-between">

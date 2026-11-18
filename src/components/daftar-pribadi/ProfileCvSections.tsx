@@ -1,12 +1,26 @@
 "use client";
 
-import type { ReactNode } from "react";
-import type { CVData } from "@/components/cv-form/types";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { toast } from "react-hot-toast";
+import type { CVData, DokumenPendukung } from "@/components/cv-form/types";
 import { BULAN_OPTIONS } from "@/components/cv-form/defaults";
+import { DOC_ACCEPT_INPUT, isAllowedDocUpload } from "@/components/cv-form/file-upload-rules";
 import { hubunganToJapanese } from "@/lib/cv-hubungan";
+import { isKeluargaFilled, isPendidikanFilled, isPekerjaanFilled, isSertifikatFilled } from "@/lib/cv-slots";
+import { downloadDemoDocument } from "@/lib/download-document";
+import { studentFileName } from "@/lib/student-file-name";
+import { SUPPORTING_DOCS, docShortLabel } from "@/lib/supporting-docs";
+
+const DOC_BTN =
+  "inline-flex shrink-0 items-center gap-1.5 border border-primary-pink px-3 py-1.5 text-xs uppercase tracking-widest text-primary-pink transition-colors hover:bg-primary-pink hover:text-white";
 
 function bulanLabel(v: string): string {
   return BULAN_OPTIONS.find((b) => b.value === v)?.label ?? v ?? "—";
+}
+
+function ym(year?: string, month?: string): string {
+  const parts = [bulanLabel(month ?? ""), year].map((part) => (part ?? "").trim()).filter(Boolean);
+  return parts.join(" ") || "—";
 }
 
 function yaTidakLabel(value: unknown): string {
@@ -73,7 +87,100 @@ function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
-export default function ProfileCvSections({ data }: { data: CVData }) {
+function hasDoc(value: string): boolean {
+  const text = value.trim();
+  return text.length > 0 && text !== "-";
+}
+
+function downloadDoc(value: string, sessionUrl: string | undefined, studentName: string, kind: string) {
+  const raw = value.startsWith("data:") || value.startsWith("blob:") ? "dokumen.pdf" : value;
+  const ext = raw.match(/(\.[a-z0-9]{2,5})$/i)?.[1] || ".pdf";
+  const name = `${studentFileName(kind, studentName)}${ext}`;
+  if (sessionUrl || value.startsWith("data:") || value.startsWith("blob:") || /^https?:/i.test(value)) {
+    const a = document.createElement("a");
+    a.href = sessionUrl || value;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
+  downloadDemoDocument(name, studentName);
+}
+
+function SupportingDocRow({
+  label,
+  value,
+  studentName,
+  onUpload,
+}: {
+  label: string;
+  value: string;
+  studentName: string;
+  onUpload: (filename: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const sessionUrl = useRef<string | null>(null);
+  const [localUrl, setLocalUrl] = useState<string | null>(null);
+  const uploaded = hasDoc(value);
+
+  useEffect(() => {
+    return () => {
+      if (sessionUrl.current) URL.revokeObjectURL(sessionUrl.current);
+    };
+  }, []);
+
+  return (
+    <li className="flex items-center justify-between gap-3 border border-gray-100 px-3 py-2.5">
+      <span className="min-w-0 font-medium text-text-gray">{label}</span>
+      <div className="flex shrink-0 flex-wrap justify-end gap-2">
+        {uploaded ? (
+          <button
+            type="button"
+            onClick={() => downloadDoc(value, localUrl ?? undefined, studentName, docShortLabel(label))}
+            className={DOC_BTN}
+          >
+            Download
+          </button>
+        ) : null}
+        <button type="button" onClick={() => inputRef.current?.click()} className={DOC_BTN}>
+          {uploaded ? "Reupload" : "Upload"}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={DOC_ACCEPT_INPUT}
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            if (!isAllowedDocUpload(file)) {
+              toast.error("Dokumen pendukung wajib hasil pindai PDF.");
+              return;
+            }
+            if (sessionUrl.current) URL.revokeObjectURL(sessionUrl.current);
+            const nextUrl = URL.createObjectURL(file);
+            sessionUrl.current = nextUrl;
+            setLocalUrl(nextUrl);
+            onUpload(file.name);
+            toast.success(
+              `${docShortLabel(label)} berhasil ${uploaded ? "diganti" : "diunggah"}.`
+            );
+          }}
+        />
+      </div>
+    </li>
+  );
+}
+
+export default function ProfileCvSections({
+  data,
+  onUploadDoc,
+}: {
+  data: CVData;
+  onUploadDoc?: (key: keyof DokumenPendukung, filename: string) => void;
+}) {
   const i = data.informasi_dasar;
   const f = data.fisik_kesehatan;
   const d = data.dokumen;
@@ -91,6 +198,8 @@ export default function ProfileCvSections({ data }: { data: CVData }) {
           <Row label="Umur" value={i.umur} />
           <Row label="Jenis kelamin" value={jenisKelaminLabel(i.jenis_kelamin)} />
           <Row label="Kewarganegaraan" value={i.kewarganegaraan} />
+          <Row label="出身地 / Tempat lahir" value={i.tempat_lahir} />
+          <Row label="利き手 / Tangan dominan" value={i.tangan_dominan} />
           <Row label="Tanggal lahir" value={i.tanggal_lahir} />
           <Row label="Golongan darah" value={i.golongan_darah} />
           <Row label="Agama" value={i.agama} />
@@ -111,35 +220,36 @@ export default function ProfileCvSections({ data }: { data: CVData }) {
 
       <section>
         <SectionTitle>Dokumen pendukung</SectionTitle>
-        <ul className="text-sm space-y-0">
-          {(
-            [
-              ["KTP", d.ktp],
-              ["Kartu Keluarga", d.kk],
-              ["Akte kelahiran", d.akte_kelahiran],
-              ["Ijazah terakhir", d.ijazah_terakhir],
-            ] as const
-          ).map(([label, val]) => (
-            <li
-              key={label}
-              className="flex justify-between items-center gap-4 border-b border-gray-100 py-2.5 last:border-0"
-            >
-              <span className="text-text-gray font-medium">{label}</span>
-              {val ? (
-                <a
-                  href={val}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="inline-flex items-center gap-1.5 text-xs tracking-widest uppercase border border-primary-pink text-primary-pink hover:bg-primary-pink hover:text-white transition-colors px-3 py-1.5"
-                >
-                  Download
-                </a>
-              ) : (
-                <span className="text-text-gray text-xs italic">Belum diunggah</span>
-              )}
-            </li>
-          ))}
+        <ul className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+          {SUPPORTING_DOCS.map((doc) =>
+            onUploadDoc ? (
+              <SupportingDocRow
+                key={doc.cvKey}
+                label={doc.label}
+                value={d[doc.cvKey] || ""}
+                studentName={i.nama_lengkap}
+                onUpload={(filename) => onUploadDoc(doc.cvKey, filename)}
+              />
+            ) : (
+              <li
+                key={doc.cvKey}
+                className="flex items-center justify-between gap-3 border border-gray-100 px-3 py-2.5"
+              >
+                <span className="font-medium text-text-gray">{doc.label}</span>
+                {hasDoc(d[doc.cvKey] || "") ? (
+                  <button
+                    type="button"
+                    onClick={() => downloadDoc(d[doc.cvKey], undefined, i.nama_lengkap, docShortLabel(doc.label))}
+                    className={DOC_BTN}
+                  >
+                    Download
+                  </button>
+                ) : (
+                  <span className="text-xs italic text-text-gray">Belum diunggah</span>
+                )}
+              </li>
+            )
+          )}
         </ul>
       </section>
 
@@ -155,6 +265,7 @@ export default function ProfileCvSections({ data }: { data: CVData }) {
           <Row label="Berkacamata" value={yaTidakLabel(f.berkacamata)} />
           <Row label="Tato" value={adaTidakLabel(f.tato)} />
           <Row label="Merokok" value={yaTidakLabel(f.merokok)} />
+          <Row label="Minum alkohol" value={yaTidakLabel(f.minum_alkohol)} />
           <Row label="Jumlah rokok" value={jumlahRokokLabel(f.jumlah_rokok)} />
           <Row label="Buta warna" value={butaWarnaLabel(f.buta_warna)} />
           <Row label="Riwayat patah tulang" value={adaTidakLabel(f.riwayat_patah_tulang)} />
@@ -164,11 +275,11 @@ export default function ProfileCvSections({ data }: { data: CVData }) {
 
       <section>
         <SectionTitle>Riwayat pendidikan</SectionTitle>
-        {data.pendidikan.length === 0 ? (
+        {data.pendidikan.filter(isPendidikanFilled).length === 0 ? (
           <p className="text-sm text-text-gray">Belum ada data.</p>
         ) : (
           <ul className="space-y-4">
-            {data.pendidikan.map((p, idx) => (
+            {data.pendidikan.filter(isPendidikanFilled).map((p, idx) => (
               <li
                 key={p.id || idx}
                 className="border border-primary-pink/10 rounded-lg p-4 bg-primary-pink-light/30 text-sm space-y-1"
@@ -179,8 +290,7 @@ export default function ProfileCvSections({ data }: { data: CVData }) {
                   {p.jurusan ? ` · ${p.jurusan}` : ""}
                 </p>
                 <p className="text-text-gray text-xs">
-                  {bulanLabel(p.bulan_masuk)} {p.tahun_masuk} — {bulanLabel(p.bulan_lulus)}{" "}
-                  {p.tahun_lulus}
+                  {ym(p.tahun_masuk, p.bulan_masuk)} — {ym(p.tahun_lulus, p.bulan_lulus)}
                 </p>
               </li>
             ))}
@@ -190,23 +300,23 @@ export default function ProfileCvSections({ data }: { data: CVData }) {
 
       <section>
         <SectionTitle>Riwayat pekerjaan</SectionTitle>
-        {data.pekerjaan.length === 0 ? (
+        {data.pekerjaan.filter(isPekerjaanFilled).length === 0 ? (
           <p className="text-sm text-text-gray">Belum ada data.</p>
         ) : (
           <ul className="space-y-4">
-            {data.pekerjaan.map((p, idx) => (
+            {data.pekerjaan.filter(isPekerjaanFilled).map((p, idx) => (
               <li
                 key={p.id || idx}
                 className="border border-primary-pink/10 rounded-lg p-4 bg-primary-pink-light/30 text-sm space-y-1"
               >
                 <p className="font-semibold text-matte-black">{p.nama_perusahaan || "—"}</p>
                 <p className="text-text-gray">
-                  {p.posisi_pekerjaan}
+                  {p.jenis_pekerjaan || p.posisi_pekerjaan}
                   {p.status_pekerjaan ? ` · ${p.status_pekerjaan}` : ""}
                 </p>
+                {p.deskripsi_pekerjaan ? <p className="text-text-gray">{p.deskripsi_pekerjaan}</p> : null}
                 <p className="text-text-gray text-xs">
-                  {bulanLabel(p.bulan_mulai)} {p.tahun_mulai} — {bulanLabel(p.bulan_selesai)}{" "}
-                  {p.tahun_selesai}
+                  {ym(p.tahun_mulai, p.bulan_mulai)} — {ym(p.tahun_selesai, p.bulan_selesai)}
                 </p>
               </li>
             ))}
@@ -216,11 +326,11 @@ export default function ProfileCvSections({ data }: { data: CVData }) {
 
       <section>
         <SectionTitle>Sertifikat</SectionTitle>
-        {data.sertifikat.length === 0 ? (
+        {data.sertifikat.filter(isSertifikatFilled).length === 0 ? (
           <p className="text-sm text-text-gray">Belum ada data.</p>
         ) : (
           <ul className="space-y-4">
-            {data.sertifikat.map((s, idx) => (
+            {data.sertifikat.filter(isSertifikatFilled).map((s, idx) => (
               <li
                 key={s.id || idx}
                 className="border border-primary-pink/10 rounded-lg p-4 bg-primary-pink-light/30 text-sm space-y-1"
@@ -231,7 +341,7 @@ export default function ProfileCvSections({ data }: { data: CVData }) {
                   {s.keterangan_skor ? ` · ${s.keterangan_skor}` : ""}
                 </p>
                 <p className="text-text-gray text-xs">
-                  {bulanLabel(s.bulan_diperoleh)} {s.tahun_diperoleh}
+                  {ym(s.tahun_diperoleh, s.bulan_diperoleh)}
                 </p>
               </li>
             ))}
@@ -241,11 +351,11 @@ export default function ProfileCvSections({ data }: { data: CVData }) {
 
       <section>
         <SectionTitle>Susunan keluarga</SectionTitle>
-        {data.keluarga.length === 0 ? (
+        {data.keluarga.filter(isKeluargaFilled).length === 0 ? (
           <p className="text-sm text-text-gray">Belum ada data.</p>
         ) : (
           <ul className="space-y-4">
-            {data.keluarga.map((k, idx) => (
+            {data.keluarga.filter(isKeluargaFilled).map((k, idx) => (
               <li
                 key={k.id || idx}
                 className="border border-primary-pink/10 rounded-lg p-4 bg-primary-pink-light/30 text-sm space-y-1"

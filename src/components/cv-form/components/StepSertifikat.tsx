@@ -1,10 +1,11 @@
 'use client';
 import { Plus, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { FormField, FormSelect } from './FormControls';
+import { FormField, FormSelect, YmdFields } from './FormControls';
 import type { Sertifikat } from '../types';
 import { BULAN_OPTIONS, TAHUN_OPTIONS } from '../defaults';
-import { DOC_ACCEPT_INPUT, TOOLTIP_DOC_UPLOAD, isAllowedDocUpload } from '../file-upload-rules';
+import { SERTIFIKAT_OPTIONS, withCurrentOption } from '@/lib/cv-referensi';
+import { PDF_ACCEPT_INPUT, TOOLTIP_CERT_PDF, isAllowedPdfUpload } from '../file-upload-rules';
 import { FileRuleTooltip } from './FileRuleTooltip';
 
 interface Props {
@@ -21,7 +22,7 @@ const STATUS_KELULUSAN_OPTIONS = [
 
 const emptyItem = (): Sertifikat => ({
   id: crypto.randomUUID(),
-  tahun_diperoleh: '', bulan_diperoleh: '',
+  tahun_diperoleh: '', bulan_diperoleh: '', tanggal_diperoleh: '',
   nama_sertifikat: '', status_kelulusan: '', keterangan_skor: '', foto_sertifikat: '',
 });
 
@@ -54,12 +55,12 @@ export default function StepSertifikat({ items, onChange, onFileChange, errors =
             <button onClick={() => remove(item.id)} className="text-red-400 hover:text-red-600 transition"><Trash2 size={16} /></button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField
+            <FormSelect
               id={`field-sertifikat-nama-${item.id}`}
-              label="免許・資格名 / Nama Sertifikat / Lisensi"
+              label="免許・資格 / Nama Sertifikat"
               value={item.nama_sertifikat}
               onChange={(v) => update(item.id, 'nama_sertifikat', v)}
-              placeholder="Contoh: JFT Basic A2, SIM A"
+              options={withCurrentOption(SERTIFIKAT_OPTIONS, item.nama_sertifikat)}
               required
               className="sm:col-span-2"
               error={errors[`sertifikat-${item.id}-nama_sertifikat`]}
@@ -81,35 +82,31 @@ export default function StepSertifikat({ items, onChange, onFileChange, errors =
               placeholder="Contoh: 245 Poin"
               error={errors[`sertifikat-${item.id}-keterangan_skor`]}
             />
-            <FormSelect
-              id={`field-sertifikat-bulan-${item.id}`}
-              label="取得月 / Bulan Diperoleh"
-              value={item.bulan_diperoleh}
-              onChange={(v) => update(item.id, 'bulan_diperoleh', v)}
-              options={BULAN_OPTIONS}
-              error={errors[`sertifikat-${item.id}-bulan_diperoleh`]}
-            />
-            <FormSelect
-              id={`field-sertifikat-tahun-${item.id}`}
-              label="取得年 / Tahun Diperoleh"
-              value={item.tahun_diperoleh}
-              onChange={(v) => update(item.id, 'tahun_diperoleh', v)}
-              options={TAHUN_OPTIONS}
-              error={errors[`sertifikat-${item.id}-tahun_diperoleh`]}
+            <YmdFields
+              idPrefix={`field-sertifikat-tanggal-${item.id}`}
+              label="取得 / Diperoleh"
+              year={item.tahun_diperoleh}
+              month={item.bulan_diperoleh}
+              onYear={(v) => update(item.id, 'tahun_diperoleh', v)}
+              onMonth={(v) => update(item.id, 'bulan_diperoleh', v)}
+              yearOptions={TAHUN_OPTIONS}
+              monthOptions={BULAN_OPTIONS}
             />
             <div className="sm:col-span-2 flex flex-col gap-1.5">
               <div className="text-sm font-medium text-slate-700 inline-flex items-center gap-1.5">
-                <span>File Sertifikat (Foto/PDF) - Opsional</span>
-                <FileRuleTooltip text={TOOLTIP_DOC_UPLOAD} />
+                <span>File Sertifikat (PDF)</span>
+                <span className="text-red-500">*</span>
+                <FileRuleTooltip text={TOOLTIP_CERT_PDF} />
               </div>
               <input
+                id={`field-sertifikat-file-${item.id}`}
                 type="file"
-                accept={DOC_ACCEPT_INPUT}
-                title={TOOLTIP_DOC_UPLOAD}
+                accept={PDF_ACCEPT_INPUT}
+                title={TOOLTIP_CERT_PDF}
                 onChange={(e) => {
                   const file = e.target.files?.[0] ?? null;
-                  if (file && !isAllowedDocUpload(file)) {
-                    toast.error('Lampiran sertifikat hanya boleh PDF, JPG, JPEG, atau PNG.');
+                  if (file && !isAllowedPdfUpload(file)) {
+                    toast.error('Lampiran sertifikat wajib berupa PDF.');
                     e.target.value = '';
                     update(item.id, 'foto_sertifikat', '');
                     onFileChange?.(item.id, null);
@@ -118,11 +115,16 @@ export default function StepSertifikat({ items, onChange, onFileChange, errors =
                   update(item.id, 'foto_sertifikat', file?.name || '');
                   onFileChange?.(item.id, file);
                 }}
-                className="w-full border rounded-xl px-4 py-3 text-sm text-slate-900 bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-primary-pink focus:border-transparent transition file:mr-3 file:border-0 file:bg-primary-pink-light file:text-primary-pink file:px-3 file:py-1.5 file:rounded-lg file:cursor-pointer"
+                className={`w-full border rounded-xl px-4 py-3 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary-pink focus:border-transparent transition file:mr-3 file:border-0 file:bg-primary-pink-light file:text-primary-pink file:px-3 file:py-1.5 file:rounded-lg file:cursor-pointer ${
+                  errors[`sertifikat-${item.id}-foto_sertifikat`] ? 'border-red-400' : 'border-slate-200'
+                }`}
               />
               <p className="text-xs text-slate-500">
-                {item.foto_sertifikat ? `Terpilih: ${item.foto_sertifikat}` : 'Belum ada file dipilih'}
+                {item.foto_sertifikat ? `Terpilih: ${item.foto_sertifikat}` : 'Belum ada PDF dipilih'}
               </p>
+              {errors[`sertifikat-${item.id}-foto_sertifikat`] && (
+                <p className="text-xs text-red-600">{errors[`sertifikat-${item.id}-foto_sertifikat`]}</p>
+              )}
             </div>
           </div>
         </div>

@@ -1,15 +1,19 @@
 const TIMEZONE = "Asia/Jakarta";
 
 export function formatJapaneseDateTime(d: Date): string {
-  return new Intl.DateTimeFormat("ja-JP", {
+  const parts = new Intl.DateTimeFormat("ja-JP", {
     timeZone: TIMEZONE,
     year: "numeric",
-    month: "long",
+    month: "numeric",
     day: "numeric",
-    weekday: "long",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
-  }).format(d);
+  }).formatToParts(d);
+
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return `${value("year")}年${value("month")}月${value("day")}日 ${value("hour")}:${value("minute")}:${value("second")}`;
 }

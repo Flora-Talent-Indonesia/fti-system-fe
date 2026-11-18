@@ -14,10 +14,12 @@ interface FormFieldProps {
   error?: string;
   id?: string;
   readOnly?: boolean;
+  disabled?: boolean;
   inputTitle?: string;
   inputMode?: InputMode;
   /** Uppercase saat blur (bukan tiap ketik) — aman di mobile. Default: true kecuali email/date/number/tel. */
   autoUppercase?: boolean;
+  rows?: number;
 }
 
 const NO_UPPERCASE_TYPES = new Set(['email', 'date', 'number', 'tel']);
@@ -30,7 +32,7 @@ function shouldAutoUppercase(type: string, autoUppercase?: boolean): boolean {
 export function FormField({
   label, value, onChange, type = 'text',
   placeholder, hint, required, className = '', error, id,
-  readOnly = false, inputTitle, inputMode, autoUppercase,
+  readOnly = false, disabled = false, inputTitle, inputMode, autoUppercase, rows = 3,
 }: FormFieldProps) {
   const uppercaseOnBlur = shouldAutoUppercase(type, autoUppercase);
 
@@ -55,7 +57,7 @@ export function FormField({
     'w-full border rounded-xl px-4 py-3 text-sm text-slate-900 ' +
     'placeholder:text-slate-400 focus:outline-none focus:ring-2 ' +
     'focus:border-transparent transition ' +
-    (readOnly ? 'bg-slate-50 cursor-default text-slate-700 ' : 'bg-white ') +
+    (readOnly || disabled ? 'bg-slate-50 cursor-default text-slate-700 ' : 'bg-white ') +
     (error
       ? 'border-red-400 focus:ring-red-400'
       : 'border-slate-200 focus:ring-primary-pink');
@@ -78,10 +80,11 @@ export function FormField({
         <textarea
           value={value}
           readOnly={readOnly}
+          disabled={disabled}
           title={inputTitle}
           placeholder={placeholder}
-          rows={3}
-          className={`${base} resize-none`}
+          rows={rows}
+          className={`${base} resize-y`}
           {...inputHandlers}
         />
       ) : (
@@ -89,6 +92,7 @@ export function FormField({
           type={type}
           value={value}
           readOnly={readOnly}
+          disabled={disabled}
           title={inputTitle}
           inputMode={inputMode}
           placeholder={placeholder}
@@ -146,6 +150,51 @@ export function FormSelect({
       </select>
       {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
       {!error && hint && <p className="text-xs text-slate-400">{hint}</p>}
+    </div>
+  );
+}
+
+export function YmdFields({
+  idPrefix,
+  label,
+  year,
+  month,
+  onYear,
+  onMonth,
+  yearOptions,
+  monthOptions,
+  yearError,
+  monthError,
+}: {
+  idPrefix: string;
+  label: string;
+  year: string;
+  month: string;
+  onYear: (v: string) => void;
+  onMonth: (v: string) => void;
+  yearOptions: { value: string; label: string }[];
+  monthOptions: { value: string; label: string }[];
+  yearError?: string;
+  monthError?: string;
+}) {
+  return (
+    <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <FormSelect
+        id={`${idPrefix}-tahun`}
+        label={`${label} — 年 / Tahun`}
+        value={year}
+        onChange={onYear}
+        options={yearOptions}
+        error={yearError}
+      />
+      <FormSelect
+        id={`${idPrefix}-bulan`}
+        label={`${label} — 月 / Bulan`}
+        value={month}
+        onChange={onMonth}
+        options={monthOptions}
+        error={monthError}
+      />
     </div>
   );
 }

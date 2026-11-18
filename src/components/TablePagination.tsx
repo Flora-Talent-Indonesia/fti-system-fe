@@ -15,6 +15,8 @@ interface TablePaginationProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   onCustomModeChange: (isCustom: boolean) => void;
+  compact?: boolean;
+  showPageNumbers?: boolean;
 }
 
 function getVisiblePages(currentPage: number, totalPages: number) {
@@ -50,6 +52,8 @@ export default function TablePagination({
   onPageChange,
   onPageSizeChange,
   onCustomModeChange,
+  compact = false,
+  showPageNumbers = false,
 }: TablePaginationProps) {
   const visiblePages = getVisiblePages(currentPage, totalPages);
   const isPresetSelected = presetPageSizes.includes(pageSize) && !isCustomPageSize;
@@ -70,7 +74,7 @@ export default function TablePagination({
   };
 
   return (
-    <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className={`flex flex-col border-t border-gray-200 bg-gray-50/80 sm:flex-row sm:items-center sm:justify-between ${compact ? "gap-2 px-3 py-1.5" : "gap-3 px-4 py-3"}`}>
       <p className="text-xs text-gray-500">
         Menampilkan{' '}
         <span className="font-semibold text-gray-700">{rangeStart}</span>
@@ -90,7 +94,7 @@ export default function TablePagination({
             id="table-page-size"
             value={isCustomPageSize ? 'custom' : String(pageSize)}
             onChange={(e) => handlePresetSelect(e.target.value)}
-            className="h-9 min-w-[88px] border border-gray-300 bg-white px-2 text-sm text-gray-700 focus:border-[#fc809f] focus:outline-none"
+            className={`${compact ? "h-7 text-xs" : "h-9 text-sm"} min-w-[88px] border border-gray-300 bg-white px-2 text-gray-700 focus:border-[#fc809f] focus:outline-none`}
           >
             {presetPageSizes.map((size) => (
               <option key={size} value={size}>
@@ -114,12 +118,13 @@ export default function TablePagination({
           )}
         </div>
 
+        {showPageNumbers ? (
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="inline-flex h-9 w-9 items-center justify-center border border-gray-300 bg-white text-gray-600 transition-colors hover:border-[#fc809f] hover:text-[#fc809f] disabled:cursor-not-allowed disabled:opacity-40"
+            className={`inline-flex items-center justify-center border border-gray-300 bg-white text-gray-600 transition-colors hover:border-[#fc809f] hover:text-[#fc809f] disabled:cursor-not-allowed disabled:opacity-40 ${compact ? "h-7 w-7" : "h-9 w-9"}`}
             aria-label="Halaman sebelumnya"
           >
             <ChevronLeft size={16} />
@@ -135,7 +140,7 @@ export default function TablePagination({
                 <button
                   type="button"
                   onClick={() => onPageChange(page)}
-                  className={`inline-flex h-9 min-w-9 items-center justify-center border px-2 text-sm transition-colors ${
+                  className={`inline-flex items-center justify-center border px-2 transition-colors ${compact ? "h-7 min-w-7 text-xs" : "h-9 min-w-9 text-sm"} ${
                     page === currentPage
                       ? 'border-[#fc809f] bg-[#fc809f] text-white'
                       : 'border-gray-300 bg-white text-gray-700 hover:border-[#fc809f] hover:text-[#fc809f]'
@@ -151,12 +156,13 @@ export default function TablePagination({
             type="button"
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="inline-flex h-9 w-9 items-center justify-center border border-gray-300 bg-white text-gray-600 transition-colors hover:border-[#fc809f] hover:text-[#fc809f] disabled:cursor-not-allowed disabled:opacity-40"
+            className={`inline-flex items-center justify-center border border-gray-300 bg-white text-gray-600 transition-colors hover:border-[#fc809f] hover:text-[#fc809f] disabled:cursor-not-allowed disabled:opacity-40 ${compact ? "h-7 w-7" : "h-9 w-9"}`}
             aria-label="Halaman berikutnya"
           >
             <ChevronRight size={16} />
           </button>
         </div>
+        ) : null}
       </div>
     </div>
   );

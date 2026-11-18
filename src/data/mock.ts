@@ -1,18 +1,18 @@
 import type { Job, LpkPartner, Student } from "@/types";
 
 export const LPK_PARTNERS: LpkPartner[] = [
-  { id: "lpk-001", name: "LPK Mitra Sukabumi", kota: "Sukabumi", totalSiswa: 2 },
-  { id: "lpk-002", name: "LPK Mitra Bandung", kota: "Bandung", totalSiswa: 2 },
-  { id: "lpk-003", name: "LPK Mitra Semarang", kota: "Semarang", totalSiswa: 2 },
+  { id: "lpk-01", name: "LPK Mitra Sukabumi", kota: "Sukabumi", totalSiswa: 15 },
+  { id: "lpk-02", name: "LPK Mitra Bandung", kota: "Bandung", totalSiswa: 15 },
+  { id: "lpk-03", name: "LPK Mitra Semarang", kota: "Semarang", totalSiswa: 15 },
 ];
 
 export const STUDENTS: Student[] = [
   {
     id: "s-001",
-    noPeserta: "FTI-2024-001",
+    noPeserta: "MFTI01001",
     namaLengkap: "Ahmad Rizki Pratama",
     angkatan: "2024",
-    lpkId: "lpk-001",
+    lpkId: "lpk-01",
     lpkName: "LPK Mitra Sukabumi",
     status: "rekrut",
     jobTitle: "Manufacturing Operator",
@@ -22,10 +22,10 @@ export const STUDENTS: Student[] = [
   },
   {
     id: "s-002",
-    noPeserta: "FTI-2024-002",
+    noPeserta: "MFTI01002",
     namaLengkap: "Siti Nurhaliza",
     angkatan: "2024",
-    lpkId: "lpk-001",
+    lpkId: "lpk-01",
     lpkName: "LPK Mitra Sukabumi",
     status: "aktif",
     certificates: ["JLPT N5"],
@@ -33,10 +33,10 @@ export const STUDENTS: Student[] = [
   },
   {
     id: "s-003",
-    noPeserta: "FTI-2023-011",
+    noPeserta: "MFTI02001",
     namaLengkap: "Budi Santoso",
     angkatan: "2023",
-    lpkId: "lpk-002",
+    lpkId: "lpk-02",
     lpkName: "LPK Mitra Bandung",
     status: "match_job",
     matchJobNote: "Sudah ditempatkan di perusahaan lain (Match Job)",
@@ -45,10 +45,10 @@ export const STUDENTS: Student[] = [
   },
   {
     id: "s-004",
-    noPeserta: "FTI-2024-008",
+    noPeserta: "MFTI02002",
     namaLengkap: "Dewi Lestari",
     angkatan: "2024",
-    lpkId: "lpk-002",
+    lpkId: "lpk-02",
     lpkName: "LPK Mitra Bandung",
     status: "rekrut",
     jobTitle: "Care Worker",
@@ -58,10 +58,10 @@ export const STUDENTS: Student[] = [
   },
   {
     id: "s-005",
-    noPeserta: "FTI-2024-015",
+    noPeserta: "MFTI03001",
     namaLengkap: "Muhammad Azzaky",
     angkatan: "2024",
-    lpkId: "lpk-003",
+    lpkId: "lpk-03",
     lpkName: "LPK Mitra Semarang",
     status: "rekrut",
     interestedJobs: ["job-001", "job-003"],

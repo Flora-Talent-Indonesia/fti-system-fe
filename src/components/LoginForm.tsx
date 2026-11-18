@@ -3,8 +3,15 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { verifyFtiAdminLogin } from "@/lib/fti-admin-account";
+import { findLpkByUsername, lpkCanLogin, seedLpkAccountsIfEmpty } from "@/lib/lpk-account-storage";
+import { isStaffPortal, unlockStaffPortal } from "@/lib/staff-gate";
 
-export function LoginForm() {
+type Props = {
+  redirectTo?: string;
+};
+
+export function LoginForm({ redirectTo }: Props) {
   const [userName, setUserName] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -18,10 +25,35 @@ export function LoginForm() {
       return;
     }
 
+    seedLpkAccountsIfEmpty();
+    const lpkAccount = findLpkByUsername(userName);
+    if (lpkAccount && !lpkCanLogin(lpkAccount)) {
+      toast.error(
+        lpkAccount.isActive
+          ? "MOU LPK sudah berakhir. Login ditutup sampai FTI memperpanjang MOU. Data tidak dihapus."
+          : "Akun LPK nonaktif. Data tetap tersimpan."
+      );
+      return;
+    }
+
+    const adminCheck = verifyFtiAdminLogin(userName, password);
+    if (adminCheck === false) {
+      toast.error("Password akun Admin FTI tidak sesuai.");
+      return;
+    }
+    if (redirectTo && isStaffPortal(redirectTo) && adminCheck !== true) {
+      toast.error("Username atau password tidak sesuai.");
+      return;
+    }
+
     setIsLoading(true);
     await new Promise((resolve) => setTimeout(resolve, 500));
     setIsLoading(false);
     toast.success(`Selamat datang, ${userName.trim()}`);
+    if (redirectTo && isStaffPortal(redirectTo)) {
+      unlockStaffPortal(redirectTo);
+      window.location.assign(redirectTo);
+    }
   };
 
   return (

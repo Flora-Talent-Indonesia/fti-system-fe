@@ -2,16 +2,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Search } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { toast } from "react-hot-toast";
 import PortalPageShell from "@/components/PortalPageShell";
+import SearchField from "@/components/SearchField";
 import AlumniDataTable from "@/components/fti/AlumniDataTable";
 import AlumniTableEditModal from "@/components/fti/AlumniTableEditModal";
+import {
+  loadFtiDataSiswaStudents,
+  upsertFtiDataSiswaFromLpkStudent,
+} from "@/lib/fti-data-siswa-storage";
 import {
   nextNoPeserta,
   seedLpkStudentsIfEmpty,
   upsertLpkStudent,
 } from "@/lib/lpk-student-storage";
+import { omitInactiveAccounts } from "@/lib/fti-student-account-storage";
+import { isAlumniByEntry } from "@/lib/placement";
 import { createEmptyLpkStudent, type LpkStudentRecord } from "@/types/lpk-student";
 
 export default function DataAlumniPage() {
@@ -19,22 +26,33 @@ export default function DataAlumniPage() {
   const [search, setSearch] = useState("");
   const [addingStudent, setAddingStudent] = useState<LpkStudentRecord | null>(null);
 
+  const reload = () => {
+    const lpk = seedLpkStudentsIfEmpty();
+    const fti = loadFtiDataSiswaStudents();
+    const seen = new Set(lpk.map((student) => student.id));
+    setStudents([...lpk, ...fti.filter((student) => !seen.has(student.id))]);
+  };
+
   useEffect(() => {
-    const all = seedLpkStudentsIfEmpty();
-    setStudents(all);
+    reload();
   }, []);
 
+  const alumni = useMemo(
+    () => omitInactiveAccounts(students.filter((student) => isAlumniByEntry(student))),
+    [students],
+  );
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return students;
+    if (!search.trim()) return alumni;
     const q = search.toLowerCase().trim();
-    return students.filter(
+    return alumni.filter(
       (s) =>
         s.nama_lengkap.toLowerCase().includes(q) ||
         s.no_peserta.toLowerCase().includes(q) ||
         (s.asal_lpk || "").toLowerCase().includes(q) ||
         (s.nama_katakana || "").toLowerCase().includes(q)
     );
-  }, [students, search]);
+  }, [alumni, search]);
 
   const handleAdd = () => {
     setAddingStudent(
@@ -47,12 +65,11 @@ export default function DataAlumniPage() {
   };
 
   const handleSaveExisting = (updated: LpkStudentRecord) => {
-    upsertLpkStudent(updated);
-    setStudents((prev) => {
-      const exists = prev.some((s) => s.id === updated.id);
-      if (exists) return prev.map((s) => (s.id === updated.id ? updated : s));
-      return [updated, ...prev];
-    });
+    const inFti = loadFtiDataSiswaStudents().some((student) => student.id === updated.id);
+    const inLpk = seedLpkStudentsIfEmpty().some((student) => student.id === updated.id);
+    if (inFti) upsertFtiDataSiswaFromLpkStudent(updated);
+    if (inLpk || !inFti) upsertLpkStudent(updated);
+    reload();
   };
 
   const handleSaveNew = (created: LpkStudentRecord) => {
@@ -85,19 +102,7 @@ export default function DataAlumniPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="relative group">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-pink"
-                size={18}
-              />
-              <input
-                type="text"
-                placeholder="Cari nama, no, atau LPK..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-transparent border-0 border-b border-gray-300 focus:outline-none focus:border-primary-pink w-full sm:w-56"
-              />
-            </div>
+            <SearchField className="w-full sm:w-52" value={search} onChange={setSearch} />
             <button
               type="button"
               onClick={handleAdd}
@@ -110,8 +115,7 @@ export default function DataAlumniPage() {
         </header>
 
         <div className="mb-4 border border-primary-pink/20 bg-primary-pink-light px-4 py-3 text-sm text-gray-700">
-          <strong>Mode testing:</strong> Gunakan <strong>Add Data</strong> untuk menambah alumni baru.
-          Visa, COE, EKTKLN, dan Departure diisi sebagai tanggal.
+          Siswa masuk daftar ini setelah dipindahkan dari Data Siswa FTI, atau setelah tanggal perkiraan masuk Jepang terlewati. Data yang sudah ada tetap tersimpan. Tabel ini menampilkan kolom tracking, dan setiap kolomnya bisa diubah lewat Edit.
         </div>
 
         <AlumniDataTable

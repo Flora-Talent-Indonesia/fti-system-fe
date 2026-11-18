@@ -6,6 +6,12 @@ const MIN_PAGE_SIZE = 10;
 const DEFAULT_PAGE_SIZE = 10;
 const PRESET_PAGE_SIZES = [10, 25, 50, 100];
 
+/** Tabel profil siswa: 15 baris mengisi layar 16:10, layar 16:9 menggulir halaman. */
+export const STUDENT_TABLE_PAGE = {
+  defaultPageSize: 15,
+  presetPageSizes: [15, 25, 50, 100],
+};
+
 function clampPageSize(size: number, minPageSize: number) {
   const parsed = Number.isFinite(size) ? Math.floor(size) : minPageSize;
   return Math.max(minPageSize, parsed);
@@ -25,18 +31,20 @@ export function useTablePagination<T>(
     defaultPageSize?: number;
     minPageSize?: number;
     storageKey?: string;
+    presetPageSizes?: number[];
   },
 ) {
   const minPageSize = options?.minPageSize ?? MIN_PAGE_SIZE;
   const defaultPageSize = clampPageSize(options?.defaultPageSize ?? DEFAULT_PAGE_SIZE, minPageSize);
   const storageKey = options?.storageKey;
+  const presetPageSizes = options?.presetPageSizes ?? PRESET_PAGE_SIZES;
 
   const [pageSize, setPageSizeState] = useState(() =>
     readStoredPageSize(storageKey, minPageSize, defaultPageSize),
   );
   const [currentPage, setCurrentPage] = useState(1);
   const [isCustomPageSize, setIsCustomPageSize] = useState(
-    () => !PRESET_PAGE_SIZES.includes(readStoredPageSize(storageKey, minPageSize, defaultPageSize)),
+    () => !presetPageSizes.includes(readStoredPageSize(storageKey, minPageSize, defaultPageSize)),
   );
 
   const totalItems = items.length;
@@ -60,7 +68,7 @@ export function useTablePagination<T>(
   const setPageSize = (size: number) => {
     const next = clampPageSize(size, minPageSize);
     setPageSizeState(next);
-    setIsCustomPageSize(!PRESET_PAGE_SIZES.includes(next));
+    setIsCustomPageSize(!presetPageSizes.includes(next));
     if (storageKey) {
       localStorage.setItem(storageKey, String(next));
     }
@@ -79,7 +87,7 @@ export function useTablePagination<T>(
     rangeStart,
     rangeEnd,
     minPageSize,
-    presetPageSizes: PRESET_PAGE_SIZES,
+    presetPageSizes,
     isCustomPageSize,
     setCurrentPage,
     setPageSize,

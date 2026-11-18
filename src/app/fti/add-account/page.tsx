@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import PortalPageShell from '@/components/PortalPageShell';
+import TablePagination from '@/components/TablePagination';
+import { useTablePagination } from '@/hooks/useTablePagination';
 import { ArrowLeft, UserPlus, Save, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import FtiApiUser from '@/lib/fti-api-user';
@@ -25,7 +27,7 @@ function startUrutForAngkatan(users: ListUserRow[], angkatPart: string): number 
     .filter((u) => Number(u?.is_admin) === 0)
     .map((u) => String(u?.user_name || '').trim().toUpperCase())
     .map((username) => {
-      const match = username.match(/^FTI(\d{2})(\d{3})$/);
+      const match = username.match(/^FTI(\d{2})(\d+)$/);
       if (!match) return null;
       return { angkatan: Number(match[1]), urut: Number(match[2]) };
     })
@@ -41,7 +43,7 @@ function resolveNextNoPeserta(users: ListUserRow[]) {
     .filter((u) => Number(u?.is_admin) === 0)
     .map((u) => String(u?.user_name || '').trim().toUpperCase())
     .map((username) => {
-      const match = username.match(/^FTI(\d{2})(\d{3})$/);
+      const match = username.match(/^FTI(\d{2})(\d+)$/);
       if (!match) return null;
       return {
         angkatan: Number(match[1]),
@@ -55,22 +57,14 @@ function resolveNextNoPeserta(users: ListUserRow[]) {
   }
 
   const latest = studentNoPesertaValues.reduce((acc, cur) => {
-    const accScore = acc.angkatan * 1000 + acc.urut;
-    const curScore = cur.angkatan * 1000 + cur.urut;
+    const accScore = acc.angkatan * 100000 + acc.urut;
+    const curScore = cur.angkatan * 100000 + cur.urut;
     return curScore > accScore ? cur : acc;
   });
 
-  let nextAngkatan = latest.angkatan;
-  let nextNomor = latest.urut + 1;
-
-  if (nextNomor > 999) {
-    nextAngkatan += 1;
-    nextNomor = 1;
-  }
-
   return {
-    angkatan: String(nextAngkatan).padStart(2, '0'),
-    nomor: String(nextNomor).padStart(3, '0'),
+    angkatan: String(latest.angkatan).padStart(2, '0'),
+    nomor: String(latest.urut + 1).padStart(3, '0'),
   };
 }
 
@@ -108,10 +102,7 @@ export default function AddAccountPage() {
     [usersSnapshot, angkatPart],
   );
 
-  const batchUrutOverflow =
-    nameLines.length > 0 && previewStartUrut + nameLines.length - 1 > 999;
-
-  /** Nomor urut 3 digit berikutnya untuk angkatan yang sedang di input (sama dengan baris pertama preview / simpan). */
+  /** Nomor urut berikutnya untuk angkatan yang sedang di input (sama dengan baris pertama preview / simpan). */
   const nextSeqLabel = useMemo(
     () => String(previewStartUrut).padStart(3, '0'),
     [previewStartUrut],
@@ -135,6 +126,22 @@ export default function AddAccountPage() {
     });
   }, [nameLines, angkatPart, previewStartUrut]);
 
+  const {
+    paginatedItems: previewAccounts,
+    currentPage,
+    pageSize,
+    totalItems,
+    totalPages,
+    rangeStart,
+    rangeEnd,
+    minPageSize,
+    presetPageSizes,
+    isCustomPageSize,
+    setCurrentPage,
+    setPageSize,
+    setIsCustomPageSize,
+  } = useTablePagination(generatedAccounts, { defaultPageSize: 10 });
+
   const handleSaveAccounts = useCallback(async () => {
     const names = namesInput
       .split('\n')
@@ -153,10 +160,6 @@ export default function AddAccountPage() {
         fresh?.status === 200 && Array.isArray(fresh?.data) ? fresh.data : usersSnapshot;
       const ang = padAngkatan(angkatan);
       const start = startUrutForAngkatan(users, ang);
-      if (start + names.length - 1 > 999) {
-        toast.error('Nomor urut akan melewati 999 untuk angkatan ini. Kurangi jumlah baris atau ubah angkatan.');
-        return;
-      }
       const password = `jukyu${ang}`;
 
       const rows = names.map((name, index) => {
@@ -189,7 +192,7 @@ export default function AddAccountPage() {
 
   const handleExportCsv = useCallback(() => {
     if (generatedAccounts.length === 0) return;
-    const header = 'NIM,Nama,Password\n';
+    const header = 'ID Peserta,Nama,Password\n';
     const body = generatedAccounts
       .map((a) => `"${a.nim}","${a.name.replace(/"/g, '""')}","${a.password}"`)
       .join('\n');
@@ -257,14 +260,14 @@ export default function AddAccountPage() {
                   />
                   <span
                     className="shrink-0 whitespace-nowrap px-4 py-2.5 bg-gray-100 border border-l-0 border-gray-300 text-gray-600 font-mono text-sm tabular-nums min-w-14 text-center"
-                    title="Nomor urut berikutnya untuk angkatan ini (dari user aktif di database; sama dengan NIM baris pertama di preview)"
+                    title="Nomor urut berikutnya untuk angkatan ini (dari user aktif di database; sama dengan ID Peserta baris pertama di preview)"
                   >
                     {usersListFetched ? nextSeqLabel : '···'}
                   </span>
                 </div>
                 <p className="text-[10px] text-gray-500 mt-1.5 leading-relaxed">
                   {!usersListFetched && <span className="text-gray-400">Memuat nomor dari server… </span>}
-                  NIM berikutnya untuk angkatan ini: FTI<span className="font-bold text-[#be185d]">{angkatPart}</span>
+                  ID Peserta berikutnya untuk angkatan ini: FTI<span className="font-bold text-[#be185d]">{angkatPart}</span>
                   {nextSeqLabel}. Angkatan 5 gunakan &quot;05&quot;.
                 </p>
                 <p className="text-[10px] text-emerald-700/90 mt-1 leading-relaxed">
@@ -285,7 +288,7 @@ export default function AddAccountPage() {
                   placeholder="Budi Santoso&#10;Siti Aminah&#10;Ahmad Fauzi&#10;&#10;(Paste daftar nama dari file Excel atau ketik manual.&#10;1 Baris = 1 Nama Siswa)"
                 ></textarea>
                 <p className="text-[10px] text-gray-500 mt-1.5 leading-relaxed">
-                  NIM diurutkan otomatis per angkatan mengikuti nomor berikutnya di database (satu baris = satu akun).
+                  ID Peserta diurutkan otomatis per angkatan mengikuti nomor berikutnya di database (satu baris = satu akun). Lewat 999, nomor terus bertambah: 1000, 1001, dan seterusnya.
                   Password default semua baris: <span className="font-mono">jukyu{angkatPart}</span>.
                 </p>
               </div>
@@ -301,12 +304,6 @@ export default function AddAccountPage() {
                   <span className="w-1.5 h-1.5 bg-green-600 rounded-full"></span>
                   Preview Akun ({generatedAccounts.length} Siswa)
                 </h2>
-                {batchUrutOverflow && (
-                  <p className="text-xs text-red-700 mt-1 max-w-xl">
-                    Nomor urut untuk angkatan ini akan melewati 999. Kurangi jumlah nama atau ubah angkatan sebelum
-                    menyimpan.
-                  </p>
-                )}
               </div>
 
               <div className="flex items-center gap-3">
@@ -322,7 +319,7 @@ export default function AddAccountPage() {
                 <button
                   type="button"
                   onClick={handleSaveAccounts}
-                  disabled={generatedAccounts.length === 0 || isSaving || batchUrutOverflow}
+                  disabled={generatedAccounts.length === 0 || isSaving}
                   className="flex items-center gap-2 px-5 py-2 bg-primary-pink border border-primary-pink text-xs tracking-widest uppercase text-white hover:bg-[var(--primary-pink-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Save size={16} strokeWidth={1.5} />
@@ -337,7 +334,7 @@ export default function AddAccountPage() {
                   <UserPlus size={48} strokeWidth={1} className="mb-4 opacity-30" />
                   <p className="text-sm font-medium">Belum ada data siswa</p>
                   <p className="text-xs mt-2 max-w-sm leading-relaxed">
-                    Masukkan daftar nama di kolom sebelah kiri untuk melihat preview NIM dan Password yang akan digenerate.
+                    Masukkan daftar nama di kolom sebelah kiri untuk melihat preview ID Peserta dan Password yang akan digenerate.
                   </p>
                 </div>
               ) : (
@@ -348,7 +345,7 @@ export default function AddAccountPage() {
                         No
                       </th>
                       <th scope="col" className="px-6 py-4 font-semibold">
-                        NIM (No. Peserta)
+                        ID Peserta
                       </th>
                       <th scope="col" className="px-6 py-4 font-semibold">
                         Nama Siswa
@@ -359,7 +356,7 @@ export default function AddAccountPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {generatedAccounts.map((acc) => (
+                    {previewAccounts.map((acc) => (
                       <tr key={acc.id} className="bg-white border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                         <td className="px-6 py-4 text-center text-gray-400">{acc.id}</td>
                         <td className="px-6 py-4 font-mono font-medium text-[#be185d]">{acc.nim}</td>
@@ -373,6 +370,22 @@ export default function AddAccountPage() {
                     ))}
                   </tbody>
                 </table>
+              )}
+              {generatedAccounts.length > 0 && (
+                <TablePagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={totalItems}
+                  rangeStart={rangeStart}
+                  rangeEnd={rangeEnd}
+                  pageSize={pageSize}
+                  minPageSize={minPageSize}
+                  presetPageSizes={presetPageSizes}
+                  isCustomPageSize={isCustomPageSize}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={setPageSize}
+                  onCustomModeChange={setIsCustomPageSize}
+                />
               )}
             </div>
           </div>
