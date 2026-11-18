@@ -10,7 +10,7 @@ export function useFixedRowWindow(rowCount: number, visibleRows = 10) {
     if (!root) return;
     const head = root.querySelector("thead");
     const row = root.querySelector("tbody tr");
-    if (!head || !row) {
+    if (!(head instanceof HTMLElement) || !(row instanceof HTMLElement)) {
       setMaxHeight(undefined);
       return;
     }

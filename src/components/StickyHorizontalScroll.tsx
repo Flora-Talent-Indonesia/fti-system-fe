@@ -75,10 +75,10 @@ const StickyHorizontalScroll = forwardRef<HTMLDivElement, Props>(function Sticky
   ref,
 ) {
   const localRef = useRef<HTMLDivElement | null>(null);
-  const style: CSSProperties = {};
+  const style: CSSProperties & Record<`--${string}`, string> = {};
   if (trackInsetLeft !== undefined) {
-    style['--scroll-track-inset-left' as string] =
-      typeof trackInsetLeft === 'number' ? `${trackInsetLeft}px` : trackInsetLeft;
+    style["--scroll-track-inset-left"] =
+      typeof trackInsetLeft === "number" ? `${trackInsetLeft}px` : trackInsetLeft;
   }
   if (maxHeight) style.maxHeight = maxHeight;
 

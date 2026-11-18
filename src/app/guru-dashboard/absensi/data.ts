@@ -134,12 +134,13 @@ function sanitizeSession(row: unknown): SessionRecord {
   });
   const hasMarks = Object.keys(marks).length > 0;
   const validDate = hasMarks && date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
-  const dateDismissed =
+  const dateDismissed = Boolean(
     hasMarks &&
-    row &&
-    typeof row === "object" &&
-    (row as SessionRecord).dateDismissed === true &&
-    validDate === null;
+      row &&
+      typeof row === "object" &&
+      (row as SessionRecord).dateDismissed === true &&
+      validDate === null,
+  );
   return { date: validDate, dateDismissed, marks };
 }
 
