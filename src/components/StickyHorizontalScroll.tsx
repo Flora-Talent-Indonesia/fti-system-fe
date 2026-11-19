@@ -17,6 +17,36 @@ function assignRef<T>(ref: Ref<T> | undefined, node: T | null) {
 }
 
 /**
+ * Jarak kiri kolom sticky ditulis tetap (left: 340px, dst).
+ * Kalau kolom sebelumnya melebar, jarak itu tertinggal dan koreksi zoom
+ * menarik sel ke kiri, sehingga muncul celah sebelum kolom berikutnya.
+ * Jarak dikunci ulang ke posisi asli tiap kolom.
+ */
+function syncStickyLeft(scroller: HTMLElement) {
+  const head = scroller.querySelector("thead tr");
+  if (!head) return;
+  const lefts: number[] = [];
+  let left = 0;
+  for (const cell of head.children) {
+    if (!(cell instanceof HTMLElement)) break;
+    const specified = getComputedStyle(cell);
+    const sticksLeft = specified.position === "sticky" && specified.right === "auto" && specified.left !== "auto";
+    if (!sticksLeft) break;
+    lefts.push(left);
+    left += cell.offsetWidth;
+  }
+  if (!lefts.length) return;
+  scroller.querySelectorAll("tr").forEach((row) => {
+    lefts.forEach((left, index) => {
+      const cell = row.children[index];
+      if (!(cell instanceof HTMLElement)) return;
+      const next = `${left}px`;
+      if (cell.style.left !== next) cell.style.left = next;
+    });
+  });
+}
+
+/**
  * zoom pada kartu tabel menggeser kolom sticky saat area tabel digulir.
  * Koreksi ini mengukur selisihnya dan menarik sel kembali ke posisi yang benar.
  */
@@ -90,16 +120,21 @@ const StickyHorizontalScroll = forwardRef<HTMLDivElement, Props>(function Sticky
       if (frame) return;
       frame = window.requestAnimationFrame(() => {
         frame = 0;
+        syncStickyLeft(scroller);
         pinZoomedSticky(scroller);
       });
     };
     schedule();
-    scroller.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
+    scroller.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    const table = scroller.querySelector("table");
+    const observer = new ResizeObserver(schedule);
+    if (table) observer.observe(table);
     return () => {
       window.cancelAnimationFrame(frame);
-      scroller.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
+      observer.disconnect();
+      scroller.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
     };
   }, [children, maxHeight]);
 
